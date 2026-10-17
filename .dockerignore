@@ -1,0 +1,6 @@
+.venv
+.git
+mobility/out
+mobility/nets
+experiments/results
+**/__pycache__
