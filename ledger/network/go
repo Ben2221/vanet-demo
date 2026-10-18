@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GO_IMAGE="${GO_IMAGE:-golang:1.20}"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CHAINCODE_DIR="$REPO_ROOT/ledger/chaincode/vanetauth"
+
+if [[ ! -f "$PWD/go.mod" && -f "$CHAINCODE_DIR/go.mod" ]]; then
+  cd "$CHAINCODE_DIR"
+fi
+
+if [[ "$#" -eq 0 ]]; then
+  set -- version
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required to run the pinned Go toolchain." >&2
+  exit 1
+fi
+
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -e GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}" \
+  -v "$PWD:$PWD" \
+  -w "$PWD" \
+  "$GO_IMAGE" go "$@"
