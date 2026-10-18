@@ -36,8 +36,8 @@ fi
 sed -i -E "s/(BatchTimeout:[[:space:]]*)2s/\\1$BATCH_TIMEOUT/g" "$CONFIG"
 
 cd "$TN"
-./network.sh down
 ./network.sh up createChannel -c "$CHANNEL" -ca
 "$SCRIPT_DIR/deploy_cc.sh"
 "$SCRIPT_DIR/enroll_identities.sh"
 "$SCRIPT_DIR/smoke_test.sh"
+bash "$SCRIPT_DIR/seed_demo.sh"

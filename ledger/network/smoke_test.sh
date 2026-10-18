@@ -3,29 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
-callers=()
-
 check_identity() {
-  local org="$1" user="$2" expected_role="$3" result caller existing
+  local org="$1" user="$2" expected_role="$3" result
   use_identity "$org" "$user"
   result="$(peer chaincode query -C "$CHANNEL" -n "$CC_NAME" -c '{"Args":["WhoAmI"]}')"
-  if [[ "$result" != *"msp=Org${org}MSP"* || "$result" != *"role=$expected_role"* ]]; then
+  if ! jq -e --arg msp "Org${org}MSP" --arg role "$expected_role" --arg id "$user" \
+      '.msp == $msp and .role == $role and .id == $id' <<<"$result" >/dev/null; then
     echo "Unexpected WhoAmI response for $user: $result" >&2
     return 1
   fi
-
-  caller="${result##*caller=}"
-  if [[ -z "$caller" || "$caller" == "$result" ]]; then
-    echo "WhoAmI response for $user did not include a caller hash: $result" >&2
-    return 1
-  fi
-  for existing in "${callers[@]}"; do
-    if [[ "$caller" == "$existing" ]]; then
-      echo "Caller hash for $user duplicates another identity: $caller" >&2
-      return 1
-    fi
-  done
-  callers+=("$caller")
   echo "$user: $result"
 }
 

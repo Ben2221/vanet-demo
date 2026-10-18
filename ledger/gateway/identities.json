@@ -1,0 +1,42 @@
+{
+  "ta1": {
+    "mspId": "Org1MSP",
+    "certPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org1.example.com/users/ta1@org1.example.com/msp/signcerts/cert.pem",
+    "keyPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org1.example.com/users/ta1@org1.example.com/msp/keystore",
+    "peerEndpoint": "localhost:7051",
+    "tlsCertPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org1.example.com/tlsca/tlsca.org1.example.com-cert.pem",
+    "hostAlias": "peer0.org1.example.com"
+  },
+  "rsu1": {
+    "mspId": "Org2MSP",
+    "certPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu1@org2.example.com/msp/signcerts/cert.pem",
+    "keyPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu1@org2.example.com/msp/keystore",
+    "peerEndpoint": "localhost:9051",
+    "tlsCertPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/tlsca/tlsca.org2.example.com-cert.pem",
+    "hostAlias": "peer0.org2.example.com"
+  },
+  "rsu2": {
+    "mspId": "Org2MSP",
+    "certPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu2@org2.example.com/msp/signcerts/cert.pem",
+    "keyPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu2@org2.example.com/msp/keystore",
+    "peerEndpoint": "localhost:9051",
+    "tlsCertPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/tlsca/tlsca.org2.example.com-cert.pem",
+    "hostAlias": "peer0.org2.example.com"
+  },
+  "rsu3": {
+    "mspId": "Org2MSP",
+    "certPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu3@org2.example.com/msp/signcerts/cert.pem",
+    "keyPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu3@org2.example.com/msp/keystore",
+    "peerEndpoint": "localhost:9051",
+    "tlsCertPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/tlsca/tlsca.org2.example.com-cert.pem",
+    "hostAlias": "peer0.org2.example.com"
+  },
+  "rsu4": {
+    "mspId": "Org2MSP",
+    "certPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu4@org2.example.com/msp/signcerts/cert.pem",
+    "keyPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/users/rsu4@org2.example.com/msp/keystore",
+    "peerEndpoint": "localhost:9051",
+    "tlsCertPath": "${FABRIC_HOME}/test-network/organizations/peerOrganizations/org2.example.com/tlsca/tlsca.org2.example.com-cert.pem",
+    "hostAlias": "peer0.org2.example.com"
+  }
+}

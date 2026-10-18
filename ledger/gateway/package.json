@@ -1,0 +1,16 @@
+{
+  "name": "vanet-ledger-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST gateway for the VANET Fabric demo ledger",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@hyperledger/fabric-gateway": "^1.13.0",
+    "@hyperledger/fabric-protos": "^0.2.2",
+    "express": "^4.21.2"
+  }
+}
