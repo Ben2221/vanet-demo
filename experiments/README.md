@@ -26,8 +26,8 @@ output, cached so an interrupted sweep resumes), `runs.csv` (one row per run), `
 
 A config lists any `network/run_scenario.py` option (`_` for `-`). At least 3 seeds are
 needed; the runner warns otherwise. Change `backend` to `ns3` for the final numbers and
-`ledger` to the gateway URL for real Fabric. `--protocol real` is Person 3's `protocol/`
-once it exists; the configs use `stub` until then.
+`ledger` to the gateway URL for real Fabric. `--protocol real` needs the network hooks in Person 3's `protocol/` (see
+`detection/README.md`, item 5); the configs use `stub` until then.
 
 ## Before the final sweep
 

@@ -44,19 +44,37 @@ Hard checks (any one flags the message): `range`, `speed_range`, `pos_jump`, `sp
   `detector.use_profile("veremi")` or `VANET_PROFILE=veremi`. **Use `veremi` when evaluating on
   VeReMi / NextGen.**
 
-## For Person 3 (protocol / RSU logic)
+## Fits Person 3's `protocol/` (checked against `protocol/rsu.py` and `vehicle.py` on main)
 
-1. **Do not count `features["foreign"] == 1` messages in the pseudonym's K-of-W window.**
-   A foreign message is a copy of someone's message sent by another sender; counting it
-   would get the innocent owner revoked. Use `detection.reporting.ReportingRule`, or copy
-   its two lines. The copier is caught through its own pseudonym (`sybil`).
-2. **Log the pseudonym of each vehicle once:** `node.log("PID_ASSIGN", 0, None, "<pid hex>")`
-   from the vehicle node whenever it starts using a pseudonym. Without it the evaluation cannot
-   tell which vehicle a reported pseudonym belongs to (it falls back to `PSEUDONYM_CHANGE`
-   and `IDENTITY_REVEALED`, and counts what it could not resolve in `pids_unresolved`).
-3. K and W: the stand-in uses K=3, W=10. On generated data, K=6, W=10 cut honest false reports
-   from 5.6 % to 1.3 % of honest vehicles for 0.3 s more delay (`evaluate.tune_k_w`). The window size hardly
-   matters because attack flags come in runs. Re-tune on the NextGen test split before fixing it.
+`RSU.verify_bsm` calls `detector.check(payload, history)` with the BSM payload
+`{"pid", "fields": {x, y, speed, heading, timestamp, ...}, "ticket"}` and the pseudonym's earlier
+payloads. `check` accepts that format as well as the flat one of interface 5 (`detector.normalize`).
+Without `seq`, `rsu_x/rsu_y` or `sender` the checks that need them (range, sequence replay,
+foreign sender, sybil, sudden appearance) are skipped, and a BSM without x, y, speed and a
+time is not flagged and never raises, so `verify_bsm` does not turn it into "malformed_bsm".
+`detection/tests/test_protocol_integration.py` runs honest and lying vehicles through the real
+`Vehicle` and `RSU` classes: an honest car is never flagged; a car that claims 30 m/s while moving at
+10 m/s is reported by both RSUs, revoked on the ledger, and its later BSMs are dropped.
+
+Things for Person 3 / Person 1 to look at (not changed by me):
+
+1. **History length.** `RSU.verify_bsm` keeps only the last `detector_w` payloads (10) as the history.
+   The speed checks compare against a message 0.8-3 s old, i.e. 8-30 BSMs at 10 Hz, so keep ~20-30
+   payloads of history and use W only for the K-of-W window.
+2. **K.** The RSU default is `detector_k=2`. On generated data K=2 reports 8.8 % of honest vehicles,
+   K=3 5.6 %, K=6 1.3 % (for 0.3 / 0.4 / 0.7 s delay, `evaluate.tune_k_w`); the ledger needs two RSUs
+   to agree, which helps, but re-tune K on the NextGen test split before fixing it.
+3. **Repeated reports.** The RSU calls `report_misbehaviour` on every flagged message once the window has
+   K flags. `detection.reporting.ReportingRule` reports once per pseudonym; fewer ledger writes.
+4. **Time.** The BSM `timestamp` must be simulated time, not `time.time()`; the checks use it to
+   compute speeds. (Authentication freshness in `protocol/` uses `time.time()`; that is for Person 1 / 3.)
+5. **Network hooks.** `protocol/__init__.py` has no `create_vehicle`, `create_rsu`, `setup` (interface 3),
+   so `run_scenario.py --protocol real` cannot load it yet, and `protocol/` writes nothing to the metrics
+   CSV. My result collector needs the events `REPORT` (result = pseudonym) and
+   `PID_ASSIGN` (node = vehicle, result = pseudonym, once per pseudonym) to score detection per vehicle.
+6. When the network layer provides the sender (`node.last_sender`) put it in `fields["sender"]` and the RSU's
+   receive position in `fields["rsu_x"], fields["rsu_y"]`: that switches on the replay-by-copy, sybil and range
+   checks. Messages with `features["foreign"] == 1` must not count towards the pseudonym's window.
 
 ## What is verified, and what is not
 

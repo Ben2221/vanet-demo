@@ -134,8 +134,30 @@ def reset() -> None:
     _contexts.clear()
 
 
+TIME_FIELDS = ("t", "timestamp", "sendTime", "time")
+
+
+def normalize(b: dict) -> dict:
+    """Accept both BSM formats and return the flat one of interface 5.
+
+    flat      {"pid", "seq", "t", "x", "y", "speed", "heading", "rsu_x", "rsu_y", "rx_time", "sender"}
+    protocol  {"pid", "fields": {"x", "y", "speed", "heading", "timestamp", ...}, "ticket": ...}
+              (what protocol/vehicle.py make_bsm builds and protocol/rsu.py passes to the detector)
+
+    Optional inputs may be missing (seq, rsu_x/rsu_y, rx_time, sender): the checks that need
+    them are skipped. x, y, speed and a time field are required (KeyError otherwise)."""
+    if "fields" not in b:
+        return b
+    fl = b["fields"]
+    t = next(float(fl[k]) for k in TIME_FIELDS if k in fl)
+    return {"pid": str(b.get("pid", "")), "seq": fl.get("seq"), "t": t, "x": float(fl["x"]),
+            "y": float(fl["y"]), "speed": float(fl["speed"]), "heading": float(fl.get("heading", 0.0)),
+            "rsu_x": fl.get("rsu_x"), "rsu_y": fl.get("rsu_y"), "rx_time": float(fl.get("rx_time", t)),
+            "sender": fl.get("sender")}
+
+
 def _context(bsm: dict) -> _Context:
-    key = (round(bsm.get("rsu_x", 0.0)), round(bsm.get("rsu_y", 0.0)))
+    key = (round(bsm.get("rsu_x") or 0.0), round(bsm.get("rsu_y") or 0.0))
     ctx = _contexts.get(key)
     if ctx is None:
         ctx = _contexts[key] = _Context()
@@ -150,15 +172,18 @@ def _angle_diff(a: float, b: float) -> float:
 
 def rule_features(bsm: dict, history: list[dict]) -> dict:
     """All checks for one message. Returns the flat feature dict."""
+    bsm = normalize(bsm)
+    history = [normalize(h) for h in history]
     f: dict = {k: 0 for k in HARD + WEAK + INFO}
     f.update({k: 0.0 for k in NUMERIC})
     t, x, y, v = bsm["t"], bsm["x"], bsm["y"], bsm["speed"]
     ctx = _context(bsm)
 
-    d_rsu = math.hypot(x - bsm.get("rsu_x", x), y - bsm.get("rsu_y", y))
+    has_rsu = bsm.get("rsu_x") is not None and bsm.get("rsu_y") is not None
+    d_rsu = math.hypot(x - bsm["rsu_x"], y - bsm["rsu_y"]) if has_rsu else 0.0
     f["d_rsu"] = d_rsu
     f["speed"] = v
-    if d_rsu > MAX_RANGE:
+    if has_rsu and d_rsu > MAX_RANGE:
         f["range"] = 1
     if v > MAX_SPEED or v < 0:
         f["speed_range"] = 1
@@ -185,7 +210,8 @@ def rule_features(bsm: dict, history: list[dict]) -> dict:
             dt = t - prev["t"]
             f["dt"] = dt
             # replay by the same sender: time or sequence goes backwards
-            if dt <= 0 or bsm["seq"] <= prev["seq"]:
+            seq_back = bsm.get("seq") is not None and prev.get("seq") is not None and bsm["seq"] <= prev["seq"]
+            if dt <= 0 or seq_back:
                 f["replay"] = 1
             elif dt <= MAX_GAP:
                 implied = math.hypot(x - prev["x"], y - prev["y"]) / dt
@@ -227,7 +253,7 @@ def rule_features(bsm: dict, history: list[dict]) -> dict:
                     f["pos_speed"] = 1
                 if f["accel"] > MAX_ACCEL:
                     f["speed_cons"] = 1
-    elif d_rsu < APPEAR_RADIUS:
+    elif has_rsu and d_rsu < APPEAR_RADIUS:
         f["sudden_appear"] = 1
 
     if ctx.overlap(bsm["pid"], t, x, y):
@@ -261,8 +287,12 @@ def feature_vector(f: dict) -> list[float]:
 
 
 def check(bsm: dict, history: list[dict]) -> tuple[bool, dict]:
-    """Interface 5. Returns (flagged, features)."""
-    f = rule_features(bsm, history)
+    """Interface 5. Returns (flagged, features). A BSM without x, y, speed and a time is not flagged
+    (features has "error"): authentication, not the detector, decides whether it is malformed."""
+    try:
+        f = rule_features(bsm, history)
+    except (KeyError, TypeError, ValueError, StopIteration) as exc:
+        return False, {"error": f"unreadable_bsm: {exc!r}"}
     if os.environ.get("VANET_DETECTOR", "rules") == "ml":
         model = _load_model()
         if model is not None:
