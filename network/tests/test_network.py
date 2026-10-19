@@ -172,3 +172,62 @@ def test_traci_matches_fcd():
         assert checked > 0
     finally:
         mob.close()
+
+
+def test_ledger_view_lists_traces():
+    clock = FakeClock()
+    bridge = LedgerBridge(InMemoryLedger(commit_ms=100, commit_jitter=0, trace_threshold=2),
+                          clock.now, clock.schedule, sync_identity="rsu0")
+    a = bridge.view("rsu0")
+    a.request_trace("t1", "pid1", "test")
+    assert a.traces() == {}
+    clock.run(0.2)
+    assert list(a.traces()) == ["t1"] and not a.traces()["t1"]["approved"]
+    assert bridge.sync_identity == "rsu0"
+
+
+@pytest.fixture(scope="module")
+def real_run(tmp_path_factory):
+    """Person 3's protocol (ZKP authentication, signed tickets, ledger) in the scenario."""
+    pytest.importorskip("coincurve")
+    from network.run_scenario import main
+    out = tmp_path_factory.mktemp("real")
+    summary = main(["--backend", "lite", "--vehicles", "30", "--duration", "40", "--seed", "3",
+                    "--protocol", "real", "--attacker-ratio", "0.1", "--attack", "random_pos",
+                    "--attack-start", "5", "--mock-commit-ms", "300", "--out", str(out), "--quiet"])
+    with (out / "metrics.csv").open() as f:
+        rows = list(csv.DictReader(f))
+    return out, summary, rows
+
+
+def test_real_protocol_runs_end_to_end(real_run):
+    out, summary, rows = real_run
+    events = {r["event"] for r in rows}
+    for ev in ("PID_ASSIGN", "AUTH_VERIFY", "AUTH_OK", "HANDOVER_OK", "TX_PREAUTH", "PREAUTH_OK",
+               "LEDGER_SUBMIT", "LEDGER_VISIBLE", "REPORT", "REVOKED_VISIBLE"):
+        assert ev in events, ev
+    assert summary["broadcast_pdr"] > 0.8
+    # PREAUTH goes over the backbone, not the radio
+    assert all(r["result"].startswith("backbone:") for r in rows if r["event"] in ("TX_PREAUTH", "RX_PREAUTH"))
+    # 10 Hz traffic is not logged per packet without --log-bsm
+    assert not events & {"TX_BEACON", "RX_BEACON", "TX_BSM", "RX_BSM"}
+
+
+def test_real_protocol_latency_includes_crypto(real_run):
+    out, summary, rows = real_run
+    cfg = json.loads((out / "config.json").read_text())
+    ct = cfg["compute_times_used"]
+    if not ct:
+        pytest.skip("no compute-times file (python -m protocol.measure)")
+    # the RSU reports its verification time (Merkle check + ZKP verify) in AUTH_VERIFY
+    verify_ms = [float(r["latency_ms"]) for r in rows if r["event"] == "AUTH_VERIFY"]
+    assert verify_ms and min(verify_ms) == pytest.approx((ct["merkle_check"] + ct["verify"]) * 1000, abs=1e-3)   # CSV keeps 3 decimals
+    auth_ms = [float(r["latency_ms"]) for r in rows if r["event"] == "AUTH_OK"]
+    floor = (ct["verify_sig"] + ct["prove"] + ct["merkle_check"] + ct["verify"] + ct["sign"]) * 1000
+    assert min(auth_ms) > floor
+
+
+def test_ledger_contract_reference(capsys):
+    """The built-in ledger passes the conformance check Person 2's gateway must pass."""
+    from network.ledger_check import main
+    assert main(["builtin"]) == 0

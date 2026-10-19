@@ -7,3 +7,14 @@ pytest>=8
 # ns-3 with Python bindings (Linux / WSL2 only; Python 3.11-3.13):
 #   pip install ns3
 # Without it, network/run_scenario.py falls back to the built-in lite backend.
+
+# Person 3: protocol cryptography (secp256k1 Schnorr, AES-GCM escrow)
+coincurve>=20
+cryptography>=42
+
+# Person 4: detection and experiments (same list as detection/requirements.txt;
+# kept inline so the Dockerfile, which copies only this file, can install it)
+scikit-learn>=1.4
+pandas>=2.0
+scipy>=1.11
+joblib>=1.3

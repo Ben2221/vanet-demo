@@ -110,7 +110,7 @@ def setup(env) -> None:
 
 def _ta_loop(env) -> None:
     ta = env.ta_ledger
-    for req_id, tr in list(env.bridge.cache.traces.items()):
+    for req_id, tr in env.ta_ledger.traces().items():
         if tr.get("approved") and req_id not in env.shared["trace_done"]:
             env.shared["trace_done"].add(req_id)
             owner = env.shared["pid_owner"].get(tr["pid"], "?")
@@ -156,7 +156,7 @@ class Rsu:
             if node.ledger.is_revoked(pid) and pid not in env.shared["trace_opened"]:
                 env.shared["trace_opened"].add(pid)
                 node.ledger.request_trace(f"trace-{pid}", pid, "misbehaviour")
-        for req_id, tr in env.bridge.cache.traces.items():
+        for req_id, tr in node.ledger.traces().items():
             if req_id not in self.approved and not tr.get("approved"):
                 self.approved.add(req_id)
                 node.ledger.approve_trace(req_id)

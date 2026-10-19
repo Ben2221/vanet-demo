@@ -62,7 +62,9 @@ class NodeHandle:
       ledger      LedgerView for RSUs (instant reads, async writes); None for vehicles
       detector    Person 4's check(bsm, history) or None
       is_attacker True for vehicles chosen as attackers (--attacker-ratio)
-      last_sender node id of the sender of the message being handled
+      last_sender node id of the sender of the message being handled; valid only
+                  inside on_receive (read it there, or take on_receive's src argument,
+                  before scheduling anything that replies later)
       env         the ScenarioEnv shared by all nodes
     """
 
@@ -96,6 +98,15 @@ class NodeHandle:
             self._sc.backend.schedule(delay, lambda: self._sc.send(self, destination, data))
         else:
             self._sc.send(self, destination, data)
+
+    def backbone_send(self, destination: int | str, data: bytes, delay: float = 0.0) -> None:
+        """RSU only: send bytes to another RSU over the wired backbone (not the radio).
+        Arrives at the destination's on_receive after delay + --backbone-ms."""
+        if self.kind != "rsu":
+            raise RuntimeError("only RSUs are on the backbone")
+        if isinstance(destination, str):
+            destination = self._sc.node_by_name[destination].id
+        self._sc.backbone_send(self, destination, data, delay)
 
     def schedule(self, delay: float, callback: Callable, *args) -> None:
         self._sc.backend.schedule(delay, (lambda: callback(*args)) if args else callback)

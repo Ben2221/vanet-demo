@@ -71,7 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--detector", default="auto",
                    help="'auto' (detection.detector.check if present), 'none', or module:function")
     g.add_argument("--compute-times", default=None,
-                   help="JSON {op: seconds} of processing delays (prove, verify, sign, ...)")
+                   help="JSON {op: seconds} of processing delays (prove, verify, sign, ...); "
+                        "default: experiments/compute_times_all.json or protocol/compute_times.json "
+                        "if present, 'none' for zero delays")
     g.add_argument("--attacker-ratio", type=float, default=0.0, help="fraction of vehicles that lie in BSMs")
     g.add_argument("--attack", default="const_pos",
                    help="const_pos, random_pos, const_speed, random_speed, sudden_stop, flood")
@@ -82,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--mock-commit-ms", type=float, default=500.0, help="commit time of the built-in mock")
     g.add_argument("--report-k", type=int, default=2, help="RSU reports needed for auto-revocation")
     g.add_argument("--trace-threshold", type=int, default=0, help="approvals to reveal (0 = 2f+1 of the RSUs)")
+    g.add_argument("--backbone-ms", type=float, default=2.0, help="RSU-to-RSU wired backbone latency (ms)")
     g.add_argument("--ledger-sync", type=float, default=1.0, help="revocation sync period (s), real Fabric only")
     g.add_argument("--identity-header", default="X-Identity", help="HTTP header carrying the caller identity")
 
@@ -89,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--backend", choices=["auto", "ns3", "lite"], default="auto",
                    help="ns-3 if its Python bindings import, else the lite model")
     g.add_argument("--pdr-range", type=float, default=300.0, help="broadcast PDR counts receivers within this range")
-    g.add_argument("--log-bsm", action="store_true", help="one CSV row per BSM sent/received (large)")
+    g.add_argument("--log-bsm", action="store_true", help="one CSV row per BSM and RSU beacon sent/received (large)")
     g.add_argument("--netanim", action="store_true", help="write netanim.xml (ns-3 backend)")
     g.add_argument("--netanim-packets", action="store_true", help="include packets in NetAnim (very large)")
     g.add_argument("--no-flowmon", action="store_true", help="disable FlowMonitor (ns-3 backend)")
@@ -186,9 +189,21 @@ def main(argv: list[str] | None = None) -> dict:
     threshold = a.trace_threshold or (2 * ((len(rsus) - 1) // 3) + 1)
     client = make_client(a.ledger, report_k=a.report_k, trace_threshold=threshold,
                          commit_ms=a.mock_commit_ms, seed=a.seed, identity_header=a.identity_header)
-    compute_times = json.loads(Path(a.compute_times).read_text()) if a.compute_times else {}
+    ct_path = a.compute_times
+    if ct_path is None:
+        # default: measured crypto costs (protocol/measure.py; with the ECDSA baseline merged in,
+        # experiments/measure_ecdsa.py --merge) so latencies include computation, not only airtime
+        for cand in (ROOT / "experiments" / "compute_times_all.json", ROOT / "protocol" / "compute_times.json"):
+            if cand.exists():
+                ct_path = str(cand)
+                break
+    compute_times = {k: v for k, v in json.loads(Path(ct_path).read_text()).items()
+                     if not k.startswith("_")} if ct_path and ct_path != "none" else {}
+    if not a.quiet:
+        print(f"compute times: {ct_path or 'none (all processing delays are 0)'}")
 
-    config = {**vars(a), "backend": backend_name, "scenario_dir": str(sc["dir"]),
+    config = {**vars(a), "compute_times": ct_path, "compute_times_used": compute_times,
+              "backend": backend_name, "scenario_dir": str(sc["dir"]),
               "vehicles_in_trace": len(vehicles), "rsu_count": len(rsus), "trace_threshold": threshold,
               "radio": radio.as_table()}
     (out / "config.json").write_text(json.dumps(config, indent=2, default=str))
@@ -199,7 +214,7 @@ def main(argv: list[str] | None = None) -> dict:
         congestion_control=a.congestion_control, cbr_threshold=a.cbr_threshold,
         pdr_range=a.pdr_range, log_bsm=a.log_bsm, detector=load_detector(a.detector),
         attacker_ratio=a.attacker_ratio, attack=a.attack, attack_start=a.attack_start,
-        compute_times=compute_times, ledger_sync=a.ledger_sync, config=config,
+        compute_times=compute_times, ledger_sync=a.ledger_sync, backbone_ms=a.backbone_ms, config=config,
     )
     try:
         summary = scenario.run()

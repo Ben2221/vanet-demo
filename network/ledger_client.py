@@ -19,9 +19,13 @@ Pick one with make_client("mock" | "builtin" | "http://host:port").
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
+import os
 import random
+import re
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -159,66 +163,242 @@ class MockLedgerAdapter:
         return getattr(self.impl, fn)(caller, **a)
 
 
-# REST mapping for Person 2's gateway: fn -> (HTTP method, path, body fields)
-REST_ROUTES = {
-    "register_root": ("POST", "/roots", {"epoch": "epoch", "merkle_root": "merkleRoot", "valid_until": "validUntil"}),
-    "set_policy": ("POST", "/policies", {"service": "service", "classes": "classes"}),
-    "record_auth": ("POST", "/auth-records", {"pid_hash": "pidHash", "service": "service", "cls": "class", "expiry": "expiry"}),
-    "get_auth": ("GET", "/auth-records/{pid_hash}", {}),
-    "report_misbehaviour": ("POST", "/reports", {"pid": "pid", "evidence_hash": "evidenceHash"}),
-    "is_revoked": ("GET", "/revoked/{pid}", {}),
-    "get_revoked_since": ("GET", "/revoked?since={since}", {}),
-    "request_trace": ("POST", "/traces", {"req_id": "reqId", "pid": "pid", "reason": "reason"}),
-    "approve_trace": ("POST", "/traces/{req_id}/approve", {}),
-    "get_trace": ("GET", "/traces/{req_id}", {}),
-    "revoke": ("POST", "/revocations", {"pids": "pids", "reason": "reason"}),
-    "get_policy": ("GET", "/policies/{service}", {}),
-    "get_root": ("GET", "/roots/{epoch}", {}),
-}
+_HEX64 = re.compile(r"^[a-f0-9]{64}$")
+_BAD_NAME = re.compile(r"[^a-z0-9-]")
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 class RestLedgerClient:
-    """Calls Person 2's REST gateway. Each call carries the caller identity in a
-    header so the gateway can pick that identity's Fabric certificate."""
+    """Calls Person 2's REST gateway (ledger/gateway, or ledger/mock/mock_ledger_server.py).
 
-    def __init__(self, base_url: str, identity_header: str = "X-Identity", timeout: float = 30.0) -> None:
+    The scenario keeps its own names and simulated times; this client translates
+    them to the gateway contract (docs in ledger/gateway/README.md) and back:
+
+      caller      "TA" -> "ta1"; RSU names pass through lowercased, or are folded
+                  onto ``rsu_identities`` (e.g. rsu1..rsu4 enrolled on Fabric)
+      pid         sha256(run salt + pid) as 64 lowercase hex, so runs never collide
+      epoch/reqId made unique per run, for the same reason
+      service     lowercased, characters outside [a-z0-9-] become '-'
+      times       simulated seconds -> wall-clock ms in the future; reads return
+                  the simulated values the scenario wrote
+      responses   {"ok", "result", ...} is unwrapped into the shapes InMemoryLedger returns
+      revoke      sent as POST /traces/{reqId}/revoke for the trace of one of the pids
+
+    Each call carries the caller identity in a header so the gateway can pick that
+    identity's Fabric certificate. The first call sets the gateway config (K, trace
+    threshold) to the scenario's values.
+    """
+
+    def __init__(self, base_url: str, identity_header: str = "X-Identity", timeout: float = 30.0,
+                 report_k: int = 2, trace_threshold: int = 3, ta_identity: str = "ta1",
+                 rsu_identities: list[str] | None = None) -> None:
         self.base = base_url.rstrip("/")
         self.header = identity_header
         self.timeout = timeout
+        self.report_k = report_k
+        self.trace_threshold = trace_threshold
+        self.ta_identity = ta_identity
+        self.rsu_identities = rsu_identities or []
+        self.salt = secrets.token_hex(4)
+        self.epoch_base = int(time.time() * 1000)
+        self._configured = False
+        self._pid: dict[str, str] = {}            # scenario pid -> gateway pid
+        self._pid_back: dict[str, str] = {}
+        self._req_back: dict[str, str] = {}
+        self._trace_of_pid: dict[str, str] = {}   # scenario pid -> scenario req_id
+        self._expiry: dict[str, float] = {}       # gateway pid -> simulated expiry
+        self._roots: dict[int, dict] = {}
+        self._services: dict[str, str] = {}
+        self._rsu_map: dict[str, str] = {}
 
-    def call(self, caller: str, fn: str, **a) -> dict:
-        if fn not in REST_ROUTES:
-            raise LedgerError(f"unknown function {fn}")
-        method, path, fields = REST_ROUTES[fn]
-        path = path.format(**{k: urllib.parse.quote(str(v), safe="") for k, v in a.items()})
-        body = None
-        if method == "POST":
-            body = json.dumps({fields[k]: v for k, v in a.items() if k in fields}).encode()
-        req = urllib.request.Request(self.base + path, data=body, method=method,
-                                     headers={"Content-Type": "application/json", self.header: caller})
+    # ------------------------------------------------------------ translation
+    def identity(self, caller: str) -> str:
+        if caller == "TA":
+            return self.ta_identity
+        if not is_rsu(caller) or not self.rsu_identities:
+            return caller.lower()
+        if caller not in self._rsu_map:
+            self._rsu_map[caller] = self.rsu_identities[len(self._rsu_map) % len(self.rsu_identities)]
+        return self._rsu_map[caller]
+
+    def pid(self, pid: str) -> str:
+        if pid not in self._pid:
+            g = _sha(f"{self.salt}:{pid}")
+            self._pid[pid], self._pid_back[g] = g, pid
+        return self._pid[pid]
+
+    def req(self, req_id: str) -> str:
+        g = f"r{self.salt}-{_sha(req_id)[:40]}"
+        self._req_back[g] = req_id
+        return g
+
+    def service(self, service: str) -> str:
+        if service not in self._services:
+            self._services[service] = _BAD_NAME.sub("-", service.lower()).strip("-")[:32] or "service"
+        return self._services[service]
+
+    @staticmethod
+    def hex64(value: str) -> str:
+        return value if _HEX64.match(value) else _sha(value)
+
+    @staticmethod
+    def future_ms(seconds: float, cap_s: float | None = None) -> int:
+        seconds = max(float(seconds), 1.0)
+        if cap_s is not None:
+            seconds = min(seconds, cap_s)
+        return min(int(time.time() * 1000 + seconds * 1000), 9_007_199_254_740_991)
+
+    # ------------------------------------------------------------------- http
+    def _http(self, caller: str, method: str, path: str, body: dict | None = None,
+              fn: str = "") -> tuple[int, dict]:
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.base + path, data=data, method=method,
+                                     headers={"Content-Type": "application/json",
+                                              self.header: self.identity(caller)})
         t0 = time.perf_counter()
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read() or b"{}")
+                out = json.loads(resp.read() or b"{}")
         except urllib.error.HTTPError as e:
             msg = e.read().decode(errors="replace")
             if e.code in (401, 403):
                 raise AccessDenied(f"{fn} by {caller}: {msg}") from e
-            if e.code == 404 and fn in READS:
-                return {}
-            raise LedgerError(f"{fn} by {caller}: HTTP {e.code} {msg}") from e
-        wall_ms = (time.perf_counter() - t0) * 1000
-        if fn in WRITES:
-            data.setdefault("commitMs", wall_ms)
-            data.setdefault("txId", "")
-        return data
+            return e.code, {"_error": f"{fn} by {caller}: HTTP {e.code} {msg}"}
+        out.setdefault("_ms", (time.perf_counter() - t0) * 1000)
+        return 200, out
+
+    @staticmethod
+    def _ok(status: int, out: dict) -> dict:
+        if status != 200:
+            raise LedgerError(out["_error"])
+        return out
+
+    def _configure(self) -> None:
+        if self._configured:
+            return
+        self._configured = True
+        cfg = {"K": self.report_k, "traceThreshold": self.trace_threshold,
+               "maxAuthTtlSec": 86400, "demoMode": True}
+        self._ok(*self._http("TA", "PUT", "/config", cfg, "set_config"))
+
+    @staticmethod
+    def _written(out: dict, **extra) -> dict:
+        res = dict(out["result"]) if isinstance(out.get("result"), dict) else {}
+        res.update(extra)
+        res["txId"] = out.get("txId", "")
+        res["commitMs"] = float(out.get("commitMs", out.get("_ms", 0.0)))
+        return res
+
+    def _trace(self, tr: dict) -> dict:
+        return {**tr, "reqId": self._req_back.get(tr.get("reqId"), tr.get("reqId")),
+                "pid": self._pid_back.get(tr.get("pid"), tr.get("pid")),
+                "approvals": list(tr.get("approvals", [])),
+                "approved": tr.get("status") in ("APPROVED", "EXECUTED")}
+
+    # ------------------------------------------------------------------- call
+    def call(self, caller: str, fn: str, **a) -> dict:
+        if fn not in WRITES | READS:
+            raise LedgerError(f"unknown function {fn}")
+        self._configure()
+        q = urllib.parse.quote
+
+        if fn == "register_root":
+            body = {"epoch": self.epoch_base + int(a["epoch"]), "merkleRoot": self.hex64(a["merkle_root"]),
+                    "validUntil": self.future_ms(a["valid_until"])}
+            out = self._written(self._ok(*self._http(caller, "POST", "/roots", body, fn)))
+            self._roots[int(a["epoch"])] = {"epoch": int(a["epoch"]), "merkleRoot": a["merkle_root"],
+                                           "validUntil": a["valid_until"]}
+            return out
+        if fn == "set_policy":
+            path = f"/policies/{q(self.service(a['service']), safe='')}"
+            return self._written(self._ok(*self._http(caller, "PUT", path, {"classes": list(a["classes"])}, fn)))
+        if fn == "record_auth":
+            pid = self.pid(a["pid_hash"])
+            body = {"pid": pid, "service": self.service(a["service"]), "class": a["cls"],
+                    "expiry": self.future_ms(a["expiry"], cap_s=86400 - 60)}
+            out = self._written(self._ok(*self._http(caller, "POST", "/auth-records", body, fn)))
+            self._expiry[pid] = a["expiry"]
+            return out
+        if fn == "report_misbehaviour":
+            body = {"pid": self.pid(a["pid"]), "evidenceHash": self.hex64(a["evidence_hash"])}
+            out = self._written(self._ok(*self._http(caller, "POST", "/reports", body, fn)))
+            out.update(pid=a["pid"], reports=out.get("reportCount", 0))
+            return out
+        if fn == "request_trace":
+            body = {"reqId": self.req(a["req_id"]), "pid": self.pid(a["pid"]), "reason": a["reason"][:128]}
+            out = self._written(self._ok(*self._http(caller, "POST", "/traces", body, fn)))
+            self._trace_of_pid.setdefault(a["pid"], a["req_id"])
+            out.update(reqId=a["req_id"], pid=a["pid"])
+            return out
+        if fn == "approve_trace":
+            status, out = self._http(caller, "POST", f"/traces/{self.req(a['req_id'])}/approve", None, fn)
+            if status == 409:      # this RSU already approved, or the trace is no longer pending
+                tr = self.call(caller, "get_trace", req_id=a["req_id"]).get("trace") or {}
+                return {"txId": "", "commitMs": 0.0, "approvals": len(tr.get("approvals", [])),
+                        "approved": bool(tr.get("approved"))}
+            tr = self._trace(self._ok(status, out).get("result") or {})
+            return {"txId": out.get("txId", ""), "commitMs": float(out.get("commitMs", 0.0)),
+                    "approvals": len(tr["approvals"]), "approved": tr["approved"]}
+        if fn == "revoke":
+            req_id = next((self._trace_of_pid[p] for p in a["pids"] if p in self._trace_of_pid), "none")
+            body = {"pids": [self.pid(p) for p in a["pids"]], "reason": (a.get("reason") or "TA")[:128]}
+            out = self._ok(*self._http(caller, "POST", f"/traces/{self.req(req_id)}/revoke", body, fn))
+            return self._written(out, revoked_count=len(body["pids"]))
+
+        # reads: HTTP 404 means "none"
+        if fn == "get_auth":
+            pid = self.pid(a["pid_hash"])
+            status, out = self._http(caller, "GET", f"/auth-records/{pid}", None, fn)
+            if status == 404:
+                return {"auth": None}
+            rec = self._ok(status, out).get("result") or {}
+            back = {v: k for k, v in self._services.items()}
+            return {"auth": {"pidHash": a["pid_hash"], "service": back.get(rec.get("service"), rec.get("service")),
+                             "class": rec.get("class"), "expiry": self._expiry.get(pid, rec.get("expiry")),
+                             "rsu": rec.get("rsuId")}}
+        if fn == "is_revoked":
+            status, out = self._http(caller, "GET", f"/revoked/{self.pid(a['pid'])}", None, fn)
+            if status == 404:
+                return {"revoked": False}
+            return {"revoked": bool((self._ok(status, out).get("result") or {}).get("revoked"))}
+        if fn == "get_revoked_since":
+            since = int(a.get("since") or 0)
+            items = self._ok(*self._http(caller, "GET", f"/revoked?since={since}", None, fn)).get("result") or []
+            cursor = max([since - 1] + [int(r.get("revokedTs", 0)) for r in items]) + 1
+            # only this run's pseudonyms map back; the rest belong to other runs
+            return {"revoked": [self._pid_back[r["pid"]] for r in items if r.get("pid") in self._pid_back],
+                    "cursor": cursor}
+        if fn == "get_trace":
+            status, out = self._http(caller, "GET", f"/traces/{self.req(a['req_id'])}", None, fn)
+            if status == 404:
+                return {"trace": None}
+            return {"trace": self._trace(self._ok(status, out).get("result") or {})}
+        if fn == "get_policy":
+            path = f"/policies/{q(self.service(a['service']), safe='')}"
+            status, out = self._http(caller, "GET", path, None, fn)
+            if status == 404:
+                return {"classes": None}
+            return {"classes": (self._ok(status, out).get("result") or {}).get("classes")}
+        if fn == "get_root":
+            epoch = int(a["epoch"])
+            status, out = self._http(caller, "GET", f"/roots/{self.epoch_base + epoch}", None, fn)
+            if status == 404:
+                return {"root": None}
+            self._ok(status, out)
+            return {"root": self._roots.get(epoch)}
+        raise LedgerError(f"unknown function {fn}")
 
 
 def make_client(spec: str, *, report_k: int = 2, trace_threshold: int = 3,
                 commit_ms: float = 500.0, seed: int = 1, identity_header: str = "X-Identity"):
     """spec: 'mock' (Person 2's mock, else built-in), 'builtin', or a gateway URL."""
     if spec.startswith("http://") or spec.startswith("https://"):
-        return RestLedgerClient(spec, identity_header)
+        rsus = [s.strip() for s in os.environ.get("LEDGER_RSU_IDENTITIES", "").split(",") if s.strip()]
+        return RestLedgerClient(spec, identity_header, report_k=report_k,
+                                trace_threshold=trace_threshold, rsu_identities=rsus)
     if spec == "mock":
         try:
             from ledger import mock_ledger  # Person 2

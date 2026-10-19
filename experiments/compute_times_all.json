@@ -1,0 +1,21 @@
+{
+  "prove": 4.3247666665896154e-05,
+  "prove_full": 8.472166664432734e-05,
+  "verify": 8.394133333543625e-05,
+  "merkle_check": 7.2703333474540465e-06,
+  "sign": 8.355833332946835e-05,
+  "verify_sig": 8.297933333475763e-05,
+  "bsm_sign": 9.245200000198869e-05,
+  "bsm_verify": 0.00018189166662826515,
+  "ec_mult": 1.7879999989721304e-05,
+  "hash": 4.967999993823469e-07,
+  "_meta": {
+    "machine": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "python": "3.12.10",
+    "scale": 1.0,
+    "merkle_depth": 9,
+    "unit": "s"
+  },
+  "ecdsa_sign": 2.1350600000005216e-05,
+  "ecdsa_verify": 5.413460001000203e-05
+}

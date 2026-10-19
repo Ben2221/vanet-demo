@@ -4,7 +4,9 @@ The network layer owns the timer and the vehicle's true kinematics. Each tick
 it builds the *claimed* state (true state, or a falsified one for attacker
 vehicles), and asks the protocol to turn it into bytes with
 ``app.make_bsm(node, sim_time, state)`` (Person 3 signs it and attaches the
-ticket). Without a protocol BSM builder a plain unsigned BSM is used.
+ticket). The BSM goes on air after the signing time,
+``node.processing_delay(app.bsm_sign_op)`` (default op "bsm_sign"). Without a
+protocol BSM builder a plain unsigned BSM is used.
 
 Congestion control (--congestion-control): every second the vehicle looks at
 its own channel busy ratio; above the threshold (0.6) it halves its beacon
@@ -121,12 +123,15 @@ class Beaconer:
         t = self.node.now()
         state = self._state(t)
         app = self.node.app
+        delay = 0.0
         if app is not None and hasattr(app, "make_bsm"):
             data = app.make_bsm(self.node, t, state)
+            # signing time before the BSM goes on air (app.bsm_sign_op names the operation)
+            delay = self.node.processing_delay(getattr(app, "bsm_sign_op", "bsm_sign"))
         else:
             data = plain_bsm(self.node, t, state, self.size)
         if data:
-            self.node.send(BROADCAST, data)
+            self.node.send(BROADCAST, data, delay=delay)
         self.seq += 1
         rate = self.rate * (self.attack.rate_factor if self.attack else 1.0)
         # +-5 % jitter, as real beaconing is not perfectly periodic

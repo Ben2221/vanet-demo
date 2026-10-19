@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Iterable
-from coincurve import PublicKey
+from coincurve import PrivateKey, PublicKey
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -20,22 +21,28 @@ def _hash_scalar(*parts: bytes) -> int:
         h.update(p)
     return int.from_bytes(h.digest(), "big") % N
 
+@lru_cache(maxsize=8192)
+def _parse(point: bytes) -> PublicKey:
+    """Parsed curve point; cached because the same keys (RSUs, pseudonyms) are checked over and over."""
+    return PublicKey(point)
+
 def _point_mul(point: bytes, scalar: int) -> bytes:
     if scalar % N == 0:
         raise ValueError("zero scalar does not produce a valid public point")
-    return PublicKey(point).multiply(_i32(scalar)).format(compressed=True)
+    return _parse(point).multiply(_i32(scalar)).format(compressed=True)
 
 def _base_mul(scalar: int) -> bytes:
+    """scalar * G with libsecp256k1's precomputed generator tables (same result as multiplying G)."""
     if scalar % N == 0:
         raise ValueError("secret/scalar must be non-zero")
-    return PublicKey(G_COMPRESSED).multiply(_i32(scalar)).format(compressed=True)
+    return PrivateKey(_i32(scalar)).public_key.format(compressed=True)
 
 def _point_add(a: bytes, b: bytes) -> bytes:
-    return PublicKey.combine_keys([PublicKey(a), PublicKey(b)]).format(compressed=True)
+    return PublicKey.combine_keys([_parse(a), _parse(b)]).format(compressed=True)
 
 def _valid_point(point: bytes) -> bool:
     try:
-        PublicKey(point)
+        _parse(bytes(point))
         return True
     except Exception:
         return False
