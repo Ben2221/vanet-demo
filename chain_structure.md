@@ -65,10 +65,10 @@ Pick a working directory outside your repo (it holds large generated files):
 mkdir -p ~/fabric && cd ~/fabric
 curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh
 chmod +x install-fabric.sh
-./install-fabric.sh --fabric-version 2.5.9 docker samples binary
+./install-fabric.sh --fabric-version 2.5.16 docker samples binary
 ```
 
-(Use the latest 2.5.x patch if 2.5.9 is not current. Do **not** pick 3.x for this plan.)
+(Use the latest 2.5.x patch if 2.5.16 is not current; 2.5.15 or newer is required on Docker Engine 29+. Do **not** pick 3.x for this plan.)
 
 This gives you:
 

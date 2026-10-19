@@ -55,7 +55,8 @@ Fabric requests and never logs it. Do not commit generated keys or certificates.
 
 ## Identity and trust boundary
 
-Pass one of `ta1`, `rsu1`, `rsu2`, `rsu3`, or `rsu4` in `X-Identity`. When the
+Pass `ta1` or one of `rsu0`–`rsu15` in `X-Identity` (the list is `RSU_IDS` in
+`ledger/network/env.sh`). When the
 header is omitted, TA-only routes default to `ta1` and other routes default to
 `rsu1`. An unknown identity returns 400. This is **not authentication**: a
 caller who can reach this demo gateway can select `ta1` in the header. Keep it
@@ -126,8 +127,7 @@ with `LEDGER=mock LEDGER_URL=http://127.0.0.1:3001`; see `ledger/mock/README.md`
 ## Integration handoff
 
 - **Base URL:** `http://127.0.0.1:3000` (`npm start` from `ledger/gateway`).
-- **Caller header:** set `X-Identity` to `ta1`, `rsu1`, `rsu2`, `rsu3`, or
-  `rsu4`. This selects a demo identity; it is not authentication.
+- **Caller header:** set `X-Identity` to `ta1` or one of `rsu0`–`rsu15`. This selects a demo identity; it is not authentication.
 - **Write response:** `{ok, txId, blockNumber, endorseMs, commitMs, totalMs,
   retries, result}`. `commitMs` is gateway wall-clock time from transaction
   submission until the gateway peer reports commit status; it is not simulated

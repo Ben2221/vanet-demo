@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-LEDGER = os.environ.get("LEDGER", "gateway").lower()
+LEDGER = os.environ.get("LEDGER", "").lower()
 BASE_URL = os.environ.get(
     "LEDGER_URL", os.environ.get("GATEWAY_URL", "http://127.0.0.1:3000")
 ).rstrip("/")

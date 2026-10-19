@@ -154,9 +154,10 @@ chaincode function in snake_case. Writes return `{"txId", "commitMs", ...}`.
 
 - The caller identity travels in the HTTP header `X-Identity` (change with
   `--identity-header`): `TA` is sent as `ta1`, RSUs as `rsu0`, `rsu1`, ... The
-  Fabric gateway only knows the identities in `ledger/gateway/identities.json`;
-  set `LEDGER_RSU_IDENTITIES=rsu1,rsu2,rsu3,rsu4` to fold the scenario's RSUs onto
-  them (RSUs sharing an identity then count as one reporter). A wrong caller gets HTTP 403.
+  Fabric gateway only knows the identities in `ledger/gateway/identities.json`
+  (`rsu0`–`rsu15`, enough for every grid config). For maps with more RSUs, set
+  `LEDGER_RSU_IDENTITIES=rsu0,rsu1,...` to fold the scenario's RSUs onto them
+  (RSUs sharing an identity then count as one reporter). A wrong caller gets HTTP 403.
 - The gateway wants 64-hex pids, wall-clock ms times and `[a-z0-9-]` service names.
   The client hashes pids (salted per run, so runs never collide), turns simulated
   seconds into future ms and returns the scenario's own values on reads.

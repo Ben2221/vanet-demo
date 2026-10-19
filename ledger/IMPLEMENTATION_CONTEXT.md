@@ -22,7 +22,7 @@ intentional fresh reset.
 ignored. The corrected Stage B release was `1.2.3 / 7`, Stage C core was
 `1.3 / 8`, and the final `Put`/`Get` removal was `1.4 / 9`.
 - Organizations: `Org1MSP` is TA; `Org2MSP` is the RSU operator. `ta1` and
-`rsu1`–`rsu4` are enrolled client identities, not separate peers. `WhoAmI`
+`rsu0`–`rsu15` are enrolled client identities, not separate peers. `WhoAmI`
 returns `{msp, role, id}` where `id` is the certificate CommonName.
 - Peer endpoints: Org1 `localhost:7051`, Org2 `localhost:9051`; orderer
 `localhost:7050`; CAs use ports 7054 and 8054. The current ordering batch
