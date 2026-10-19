@@ -5,14 +5,7 @@ authenticate anonymously to roadside units (RSUs) with zero-knowledge proofs;
 authorization, revocation and identity-reveal approvals live on Hyperledger
 Fabric.
 
-| Folder | Owner | Content |
-|---|---|---|
-| `mobility/` | Person 1 | SUMO networks, traffic, FCD → ns-2 export, RSU placement |
-| `network/` | Person 1 | ns-3 scenario, 802.11p radio, node hooks, ledger bridge, metrics |
-| `ledger/` | Person 2 | Fabric network, `vanetauth` chaincode, REST gateway, `mock_ledger.py` |
-| `protocol/` | Person 3 | crypto, messages, vehicle and RSU logic, security tests |
-| `detection/`, `experiments/` | Person 4 | detector, experiment runner, results |
-| `docs/` | everyone | [`interfaces.md`](docs/interfaces.md), report chapters |
+This repository contains the implementation and documentation for our Bachelor Thesis Project (BTP), focused on network simulation using NS-3. It also contains the Hyperledger Fabric ledger setup for the VANET demo, defined in `ledger/` and planned in `chain_structure.md`. For detailed ledger architecture, operation, validation, and AI handoff context, see [`ledger/IMPLEMENTATION_CONTEXT.md`](ledger/IMPLEMENTATION_CONTEXT.md).
 
 ## Setup
 
