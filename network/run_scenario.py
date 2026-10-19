@@ -33,7 +33,7 @@ if str(ROOT) not in sys.path:
 
 from mobility.build_scenario import ensure_scenario  # noqa: E402
 from mobility.place_rsus import read_csv as read_rsus  # noqa: E402
-from network.ledger_client import make_client  # noqa: E402
+from network.ledger_client import LedgerError, check_gateway, make_client  # noqa: E402
 from network.radio import RadioConfig  # noqa: E402
 from network.scenario import RsuSpec, Scenario, VehicleSpec  # noqa: E402
 
@@ -145,6 +145,11 @@ def read_vehicles(node_map: Path, limit: int | None = None) -> list[VehicleSpec]
 
 def main(argv: list[str] | None = None) -> dict:
     a = build_parser().parse_args(argv)
+    if a.ledger.startswith(("http://", "https://")):
+        try:
+            check_gateway(a.ledger)      # before the (slow) scenario build
+        except LedgerError as e:
+            raise SystemExit(f"error: {e}")
     t_wall = time.time()
     sc = ensure_scenario(a.vehicles, a.duration, a.seed, a.net, a.osm, a.rsu_spacing, a.rsu_range,
                          quiet=a.quiet)
@@ -153,6 +158,8 @@ def main(argv: list[str] | None = None) -> dict:
 
     backend_name = pick_backend(a.backend)
     tag = f"{Path(sc['dir']).name}_r{int(a.rsu_spacing)}_{backend_name}_{a.protocol.replace('.', '-')}"
+    if a.ledger.startswith(("http://", "https://")):
+        tag += "_gw"      # runs against a gateway must not overwrite the in-memory ledger's runs
     out = Path(a.out) if a.out else ROOT / "experiments" / "results" / tag
     out.mkdir(parents=True, exist_ok=True)
 

@@ -9,7 +9,7 @@ reads, and one-time TA revocation.
 
 ## Setup and start
 
-Requirements: Node.js 20 or newer, npm, and the Fabric network already running.
+Requirements: Node.js 22.12 or newer, npm, and the Fabric network already running.
 From the repository root, create a fresh demo network, deploy the final chaincode
 as sequence 1, enroll identities, run the smoke check, and apply the seed with:
 
@@ -28,17 +28,18 @@ npm ci
 FABRIC_HOME=/path/to/fabric-samples npm start
 ```
 
-The server listens on `http://127.0.0.1:3000` by default. For the current
+The server listens on `http://127.0.0.1:3000` by default (`PORT=3100 npm start`,
+or `make gateway PORT=3100` from the repo root, if that port is taken). For a
 Windows checkout where Fabric material is in WSL Ubuntu, Git Bash can use:
 
 ```bash
-FABRIC_HOME=//wsl.localhost/Ubuntu/home/septhis/fabric/fabric-samples npm start
+FABRIC_HOME=//wsl.localhost/Ubuntu/home/<user>/fabric/fabric-samples npm start
 ```
 
 Or from PowerShell:
 
 ```powershell
-$env:FABRIC_HOME = '\\wsl.localhost\Ubuntu\home\septhis\fabric\fabric-samples'
+$env:FABRIC_HOME = '\\wsl.localhost\Ubuntu\home\<user>\fabric\fabric-samples'
 npm start
 ```
 

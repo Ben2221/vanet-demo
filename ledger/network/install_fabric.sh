@@ -36,7 +36,11 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 chmod +x "$SCRIPT_DIR/go"
-ln -sf "$SCRIPT_DIR/go" "$LOCAL_BIN/go"
+# Fabric's deployCC needs `go`. Use the Docker-based wrapper only when there is no real
+# Go toolchain, so an existing install is never shadowed.
+if ! command -v go >/dev/null 2>&1 || [[ "$(readlink -f "$(command -v go)")" == "$(readlink -f "$SCRIPT_DIR/go")" ]]; then
+  ln -sf "$SCRIPT_DIR/go" "$LOCAL_BIN/go"
+fi
 export PATH="$LOCAL_BIN:$PATH"
 
 mkdir -p "$FABRIC_INSTALL_ROOT"

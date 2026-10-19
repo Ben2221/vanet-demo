@@ -9,6 +9,7 @@ python experiments/run.py --config experiments/configs/density.json --jobs 4
 python experiments/run.py --config experiments/configs/compare_schemes.json --jobs 4
 python experiments/run.py --config <cfg> --collect-only                  # rebuild tables and figures only
 python experiments/run.py --config <cfg> --dry-run                       # print the commands
+python experiments/show.py                                               # key numbers of every run and sweep
 ```
 
 Results go to `experiments/results/<name>/` (git-ignored): `runs/<run>/` (the scenario's own
@@ -21,13 +22,15 @@ output, cached so an interrupted sweep resumes), `runs.csv` (one row per run), `
 | `density.json` | vehicles × attacker ratio | latency, PDR, channel load, detection |
 | `sweep_rsu_spacing.json` | RSU spacing 300, 450, 600 m | |
 | `sweep_beacon_rate.json` | beacon rate 2, 5, 10 Hz | |
-| `compare_schemes.json` | vehicles, 3 schemes | ours vs ECDSA certificates vs central authority |
+| `compare_schemes.json` | vehicles, 3 schemes | stub vs ECDSA certificates vs central authority |
+| `compare_real.json` | vehicles, 4 schemes | **real protocol** vs stub vs ECDSA vs central (lite, 120 s) |
+| `quick_real.json` | vehicles 30, 60 | quick check with the real protocol |
 | `attacks.json` | each attack | time to report, revocation, false revocations |
 
 A config lists any `network/run_scenario.py` option (`_` for `-`). At least 3 seeds are
 needed; the runner warns otherwise. Change `backend` to `ns3` for the final numbers and
-`ledger` to the gateway URL for real Fabric. `--protocol real` needs the network hooks in Person 3's `protocol/` (see
-`detection/README.md`, item 5); the configs use `stub` until then.
+`ledger` to the gateway URL for real Fabric. `quick_real.json` and `compare_real.json` run Person 3's
+real protocol (`--protocol real`); the older configs still use the `stub` stand-in.
 
 ## Before the final sweep
 

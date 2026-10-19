@@ -31,7 +31,7 @@ Design choices (demo-minimal):
 | Docker Engine | 24+ | `docker --version` |
 | Docker Compose v2 | 2.x | `docker compose version` |
 | Go | 1.21+ | `go version` |
-| Node.js | 18+ | `node -v` |
+| Node.js | 22.12+ (fabric-gateway 1.13) | `node -v` |
 | jq, curl, git | any | `jq --version` |
 | RAM available to Docker | **8 GB** | `docker info \| grep Memory` |
 

@@ -28,8 +28,8 @@ returns `{msp, role, id}` where `id` is the certificate CommonName.
 `localhost:7050`; CAs use ports 7054 and 8054. The current ordering batch
 timeout is `500ms`.
 - Fabric samples and identity material are outside the repository at
-`/home/septhis/fabric/fabric-samples` in WSL Ubuntu. The Windows gateway points
-`FABRIC_HOME` at `//wsl.localhost/Ubuntu/home/septhis/fabric/fabric-samples`.
+`~/fabric/fabric-samples` (in WSL Ubuntu on Windows). A Windows gateway points
+`FABRIC_HOME` at `//wsl.localhost/Ubuntu/home/<user>/fabric/fabric-samples`.
 
 The most recent fresh bootstrap seeded config `{K:2, traceThreshold:3,
 maxAuthTtlSec:3600, demoMode:true}`, policies `traffic-info` (private,

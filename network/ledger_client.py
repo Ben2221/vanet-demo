@@ -392,10 +392,32 @@ class RestLedgerClient:
         raise LedgerError(f"unknown function {fn}")
 
 
+def check_gateway(url: str) -> None:
+    """Fail fast with a readable message if nothing (or something else) answers at url."""
+    health = url.rstrip("/") + "/health"
+    try:
+        with urllib.request.urlopen(health, timeout=5) as resp:
+            body = json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read() or b"{}")
+        except ValueError:
+            body = None
+    except (urllib.error.URLError, OSError) as e:
+        raise LedgerError(f"no ledger gateway at {url} ({e}). Start one with "
+                          f"'make mock' (PORT=... to change the port) or 'make gateway'.") from e
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or "gateway" not in body:
+        raise LedgerError(f"{health} did not answer like a ledger gateway; another service "
+                          f"may be using that port. Pick a free port with PORT=...")
+
+
 def make_client(spec: str, *, report_k: int = 2, trace_threshold: int = 3,
                 commit_ms: float = 500.0, seed: int = 1, identity_header: str = "X-Identity"):
     """spec: 'mock' (Person 2's mock, else built-in), 'builtin', or a gateway URL."""
     if spec.startswith("http://") or spec.startswith("https://"):
+        check_gateway(spec)
         rsus = [s.strip() for s in os.environ.get("LEDGER_RSU_IDENTITIES", "").split(",") if s.strip()]
         return RestLedgerClient(spec, identity_header, report_k=report_k,
                                 trace_threshold=trace_threshold, rsu_identities=rsus)

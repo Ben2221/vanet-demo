@@ -7,21 +7,68 @@ Fabric.
 
 This repository contains the implementation and documentation for our Bachelor Thesis Project (BTP), focused on network simulation using NS-3. It also contains the Hyperledger Fabric ledger setup for the VANET demo, defined in `ledger/` and planned in `chain_structure.md`. For detailed ledger architecture, operation, validation, and AI handoff context, see [`ledger/IMPLEMENTATION_CONTEXT.md`](ledger/IMPLEMENTATION_CONTEXT.md).
 
-## Setup
+## Quick start
 
-Linux (Fedora, Ubuntu) or WSL2, Python 3.11–3.13:
+Linux (Fedora, Ubuntu) or WSL2:
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pip install ns3            # ns-3 3.44+ Python bindings (Linux only)
+git clone <repo> && cd vanet-demo
+./setup.sh          # .venv with Python 3.11-3.13, all requirements, ns-3, gateway npm packages
+make test           # all tests
+make run            # one scenario with the real protocol (100 vehicles, 120 s)
+make show           # key numbers of every run
 ```
 
-On Windows without WSL2, either use the Docker image
-(`docker build -t vanet-demo .`, see `Dockerfile`) or skip ns-3: every script
+`setup.sh` finds a Python 3.11–3.13 (and installs 3.13 with
+[uv](https://docs.astral.sh/uv/) if the system only has 3.14, e.g. Fedora 43).
+The first ns-3 install compiles cppyy (~10 min, needs `g++`); `./setup.sh --no-ns3`
+skips it. `make help` lists every target; variables override the defaults, e.g.
+`make run VEHICLES=150 DURATION=300 BACKEND=ns3`.
+
+Manual setup, if you prefer:
+
+```bash
+python3.13 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install ns3            # ns-3 3.44+ Python bindings (Linux x86_64 only)
+```
+
+On Windows without WSL2 or on macOS, either use the Docker image
+(`docker build -t vanet-demo .`, see `Dockerfile`; on Apple Silicon add
+`--platform linux/amd64`) or skip ns-3: every script
 then falls back to the **lite backend**, a small pure-Python 802.11p model with
 the same radio parameters. Use it for development and tests; final results
 come from ns-3 (`--backend ns3`).
+
+## Outputs
+
+Every run writes a folder under `experiments/results/<name>/`:
+
+| File | What |
+|---|---|
+| `summary.json` | PDR, one-hop delay per message type, channel busy ratio, bytes per message type, ledger commit times |
+| `metrics.csv` | one row per event: `sim_time,node,event,bytes,latency_ms,result`. `AUTH_OK` / `HANDOVER_OK` rows carry the end-to-end auth and handover latency |
+| `attackers.csv`, `config.json` | who lied, and the exact options of the run |
+| `flowmon.xml`, `netanim.xml` | ns-3 only (`--netanim`); open `netanim.xml` in NetAnim |
+
+`make show` (`python experiments/show.py [dirs]`) prints the key numbers of all
+runs and sweeps as one table. Sweeps (`make quick`, `make compare`,
+`experiments/run.py --config ...`) also write `runs.csv`, `aggregate.csv` (mean and
+95 % CI) and `plots/*.png`.
+
+## Real ledger (Hyperledger Fabric)
+
+Needs Docker and Node.js 22.12+:
+
+```bash
+make fabric-up              # installs Fabric 2.5.16 into ~/fabric, starts it, deploys the chaincode
+make gateway PORT=3100      # REST gateway (terminal 2)
+make run LEDGER=http://127.0.0.1:3100
+make fabric-down
+```
+
+Without Fabric, `make mock PORT=3100` starts the in-memory mock with the same REST
+API; `--ledger mock` (the default) needs no server at all.
 
 ## Run the scenario
 
