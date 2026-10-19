@@ -1,56 +1,89 @@
-# BTP: Network Simulation Using NS-3
+# VANET Authentication Demo
 
-## Overview
+Vehicles drive on real roads in SUMO and talk over IEEE 802.11p in ns-3. They
+authenticate anonymously to roadside units (RSUs) with zero-knowledge proofs;
+authorization, revocation and identity-reveal approvals live on Hyperledger
+Fabric.
 
 This repository contains the implementation and documentation for our Bachelor Thesis Project (BTP), focused on network simulation using NS-3. It also contains the Hyperledger Fabric ledger setup for the VANET demo, defined in `ledger/` and planned in `chain_structure.md`. For detailed ledger architecture, operation, validation, and AI handoff context, see [`ledger/IMPLEMENTATION_CONTEXT.md`](ledger/IMPLEMENTATION_CONTEXT.md).
 
-## Objectives
+## Setup
 
-- Design and implement network simulation scenarios using NS-3.
-- Configure network protocols, traffic patterns, and simulation parameters.
-- Evaluate network performance using appropriate metrics.
-- Analyse results and document findings.
-
-## Technology Stack
-
-- **Network simulator:** NS-3
-- **Programming language:** C++
-- **Ledger:** Hyperledger Fabric 2.5
-- **Version control:** Git and GitHub
-
-## Fabric prerequisites
-
-- Linux or WSL2 (Ubuntu 22.04+ recommended) with Docker Engine access. On Windows, install Docker Desktop and enable WSL integration for the Ubuntu distribution.
-- Docker Compose v2 and `curl`. The Fabric installer adds a private `jq` binary under `~/.local/bin` if needed.
-- About 8 GB of memory available to Docker and 10 GB of free disk space.
-
-Go is not required on the host: chaincode dependency resolution, testing, compilation, and Fabric's chaincode packaging commands use the pinned `golang:1.20` Docker image through a small `go` shim installed under `~/.local/bin`. The Fabric installer downloads Fabric 2.5.9 binaries, samples, and images outside this repository to `~/fabric/` by default.
-
-## Start the ledger
-
-From the repository root in a Linux/WSL bash shell, start the complete chain with one command:
+Linux (Fedora, Ubuntu) or WSL2, Python 3.11–3.13:
 
 ```bash
-./ledger/start.sh
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install ns3            # ns-3 3.44+ Python bindings (Linux only)
 ```
 
-`ledger/start.sh` installs Fabric tools on the first run, then builds the chaincode in Docker, starts the sample Fabric CA network, creates `vanetchannel`, deploys `vanetauth`, enrolls the demo identities (`ta1` and `rsu1`–`rsu4`), and runs the `WhoAmI` smoke test. The installer skips the Fabric download when it is already present. Each start recreates the test network and clears its ledger state. The default orderer batch timeout is 500 ms; override it with, for example, `BATCH_TIMEOUT=2s ./ledger/start.sh`.
+On Windows without WSL2, either use the Docker image
+(`docker build -t vanet-demo .`, see `Dockerfile`) or skip ns-3: every script
+then falls back to the **lite backend**, a small pure-Python 802.11p model with
+the same radio parameters. Use it for development and tests; final results
+come from ns-3 (`--backend ns3`).
 
-The default Fabric location is `~/fabric/fabric-samples`. To install elsewhere, set `FABRIC_INSTALL_ROOT=/path/to/fabric`; samples are placed under its `fabric-samples/` directory. `FABRIC_HOME` may also point directly to an existing `fabric-samples` directory. See `ledger/network/env.sh` for identity and peer CLI helpers.
-
-To stop the network and remove its generated network artifacts:
+## Run the scenario
 
 ```bash
-./ledger/network/down.sh
+python network/run_scenario.py --vehicles 100 --duration 300 --seed 1
 ```
 
-This intentionally does not run a global Docker volume prune, so unrelated Docker data is left untouched. `up.sh` recreates the Fabric test network. Demo CA passwords in `enroll_identities.sh` are not production credentials; do not reuse them outside this local test environment.
+This builds (or reuses) the SUMO scenario, runs it and writes
+`experiments/results/<name>/metrics.csv`, `summary.json`, `config.json`,
+`attackers.csv`, plus `flowmon.xml` and `netanim.xml` with ns-3.
 
-## Chaincode iteration
+Main options (all have defaults; `--help` lists everything):
+
+| Option | Default | |
+|---|---|---|
+| `--vehicles N` | 100 | vehicles in the SUMO scenario |
+| `--duration S` | 300 | simulated seconds |
+| `--seed N` | 1 | seed for SUMO, ns-3 and the applications |
+| `--rsu-spacing M` | 450 | RSU grid spacing in metres |
+| `--data-rate R` | 6 | Mb/s (802.11p, 10 MHz) |
+| `--beacon-rate HZ` | 10 | BSM rate |
+| `--congestion-control` | off | halve the beacon rate when the channel busy ratio > 0.6 |
+| `--protocol` | `stub` | `stub` (stand-in auth flow), `echo`, `real` (Person 3's `protocol/`) |
+| `--ledger` | `mock` | `mock`, or the gateway URL for real Fabric, e.g. `http://localhost:3000` |
+| `--attacker-ratio F`, `--attack A` | 0, `const_pos` | vehicles that lie in their BSMs |
+| `--backend` | `auto` | `ns3`, `lite`, or `auto` (ns-3 if installed) |
+| `--netanim` | off | write `netanim.xml` (ns-3) |
+| `--net`, `--osm` | grid | a SUMO `.net.xml` (e.g. an InTAS cut) or an OSM extract |
+| `--mobility` | `trace` | `trace` (exported ns-2 file) or `traci` (live SUMO coupling) |
+
+Switching to the real parts later is one option each:
+`--protocol real --ledger http://localhost:3000`.
+
+## Person 1 checks and results
 
 ```bash
-./ledger/chaincode/vanetauth/build.sh
-CC_VERSION=1.1 CC_SEQ=2 ./ledger/network/deploy_cc.sh
+python mobility/build_scenario.py --vehicles 100 --duration 300 --seed 1 --traceexporter
+python mobility/verify_positions.py mobility/out/grid5x5_250m_v100_d300_s1   # ns-2 vs SUMO positions
+python network/range_test.py           # arrive at 100/300 m, fail at 450 m
+python network/density_test.py --plot  # PDR and delay for 10..160 vehicles in range
+python network/density_sweep.py --vehicles 50 100 150 200 --seeds 1 2 3 --duration 120
+pytest network/tests
 ```
 
-Increase the sequence by exactly one for each chaincode definition upgrade. The current version and sequence are recorded in `ledger/network/VERSION`.
+The scenario pipeline and the parameter table are in
+[`docs/chapters/simulation_setup.md`](docs/chapters/simulation_setup.md).
+
+## ns-3 on Windows (Docker)
+
+```bash
+docker build -t vanet-demo .
+docker run --rm -v "$PWD:/work" vanet-demo python network/range_test.py --backend ns3
+docker run --rm -v "$PWD:/work" vanet-demo python network/run_scenario.py --backend ns3 --netanim
+```
+
+Open `netanim.xml` in NetAnim to watch the run. ns-3 prints harmless
+`runStaticInitializersOnce` warnings from cppyy at start-up.
+
+## Scenario from a real map
+
+```bash
+python $SUMO_HOME/tools/osmWebWizard.py           # export an area, gives osm.osm.xml.gz
+python mobility/build_scenario.py --osm path/to/osm.osm.xml.gz --vehicles 150
+python network/run_scenario.py --osm path/to/osm.osm.xml.gz --vehicles 150
+```

@@ -1,0 +1,9 @@
+# Person 1: mobility and network simulation
+eclipse-sumo>=1.20
+numpy>=1.26
+matplotlib>=3.8
+pytest>=8
+
+# ns-3 with Python bindings (Linux / WSL2 only; Python 3.11-3.13):
+#   pip install ns3
+# Without it, network/run_scenario.py falls back to the built-in lite backend.

@@ -1,0 +1,12 @@
+{
+  "name": "compare_schemes",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 300, "backend": "auto", "ledger": "mock", "attacker_ratio": 0.0,
+            "compute_times": "experiments/compute_times_all.json"},
+  "grid": {"vehicles": [50, 100, 150]},
+  "variants": [
+    {"protocol": "stub"},
+    {"protocol": "experiments.baselines.ecdsa_pki"},
+    {"protocol": "experiments.baselines.central_auth"}
+  ]
+}
