@@ -47,6 +47,7 @@ static NetDeviceContainer g_devices;
 static std::vector<Ptr<Socket>> g_sock;
 static std::vector<double> g_busy;
 static uint16_t g_port = 4000;
+static std::string g_mac = "";
 static std::function<void(uint64_t)> g_dispatch;
 // extra modules (FlowMonitor, NetAnim) register their teardown here, so their
 // objects die before the simulator and not in static destructors at exit
@@ -166,8 +167,15 @@ void Setup(uint32_t nVeh, std::string rsuXY, std::string ns2File, uint32_t seedR
                                  "DataMode", StringValue(mode),
                                  "ControlMode", StringValue(mode),
                                  "NonUnicastMode", StringValue(mode));
+    // IEEE 802.11p runs outside the context of a BSS (OCB): no beacons, association or
+    // authentication at the MAC. ns-3 has it as OcbWifiMac (wave module); builds without
+    // that module fall back to ad hoc mode, which differs only in management frames.
+    // The pip wheel (ns3 3.44, used by the Dockerfile) ships no wave module, so it runs
+    // ad hoc; summary.json says which MAC was used (network_backend.wifi_mac).
     WifiMacHelper mac;
-    mac.SetType("ns3::AdhocWifiMac", "QosSupported", BooleanValue(true));
+    TypeId ocb;
+    g_mac = TypeId::LookupByNameFailSafe("ns3::OcbWifiMac", &ocb) ? "ns3::OcbWifiMac" : "ns3::AdhocWifiMac";
+    mac.SetType(g_mac, "QosSupported", BooleanValue(true));
     g_devices = wifi.Install(phy, mac, g_nodes);
 
     InternetStackHelper inet;
@@ -175,6 +183,11 @@ void Setup(uint32_t nVeh, std::string rsuXY, std::string ns2File, uint32_t seedR
     Ipv4AddressHelper ip;
     ip.SetBase("10.1.0.0", "255.255.0.0");
     ip.Assign(g_devices);
+    // static ARP for every node pair: otherwise the first unicast to each peer
+    // (AUTH_REQ, AUTH_RESP, HANDOVER_REQ) waits for an ARP exchange that the
+    // lite backend does not model, and fails when the peer has just moved away
+    NeighborCacheHelper neighbours;
+    neighbours.PopulateNeighborCache();
 
     g_sock.clear();
     for (uint32_t i = 0; i < n; i++) {
@@ -234,6 +247,7 @@ void SetPosVel(uint32_t id, double x, double y, double vx, double vy) {
 
 double Busy(uint32_t id) { return g_busy[id]; }
 uint32_t NumNodes() { return g_nodes.GetN(); }
+std::string MacType() { return g_mac; }
 
 void Run(double until) {
     Simulator::Stop(Seconds(until));
@@ -409,7 +423,7 @@ class Ns3Backend(Backend):
         self.g.Run(until)
 
     def finish(self, out_dir) -> dict:
-        out: dict = {"backend": "ns3"}
+        out: dict = {"backend": "ns3", "wifi_mac": str(self.g.MacType())}
         if self._flowmon:
             rep = str(self.g.FlowMonitorReport(str(Path(out_dir) / "flowmon.xml")))
             if rep:

@@ -34,6 +34,12 @@ payload size in ns-3. The scenario needs only:
   (or the protocol module provides `message_type(data) -> str`)
 - `BSM` and `BEACON` are sent on EDCA AC_VO, everything else on AC_BE.
 
+Implemented in `protocol/messages.py`: `[type u8][version u8][tagged binary fields]`,
+and `protocol.message_type(data)`. Typical sizes with 500 pseudonyms per epoch
+(Merkle depth 9): BEACON ~160 B, AUTH_REQ ~530 B (+36 B per extra Merkle level),
+AUTH_RESP ~210 B, HANDOVER_REQ ~290 B, PREAUTH ~280 B, BSM ~330 B (signed, with ticket).
+PREAUTH goes over the RSU backbone (`node.backbone_send`), not the radio.
+
 ## 3. Node hooks (Person 1 → Person 3)
 
 Person 3's package `protocol/` must expose (module level):
@@ -48,7 +54,7 @@ def message_type(data: bytes) -> str      # optional: names for the logs
 Each `app` implements
 
 ```python
-app.on_receive(node, data: bytes, sim_time: float)     # required
+app.on_receive(node, data: bytes, sim_time: float)     # required (may also take src=: sender node id)
 app.on_start(node)                                      # optional: RSU at t=0, vehicle on entering the road
 app.on_stop(node)                                       # optional: vehicle leaving the road
 app.make_bsm(node, sim_time, state) -> bytes            # optional, vehicles: build + sign the 10 Hz BSM
@@ -57,6 +63,8 @@ app.make_bsm(node, sim_time, state) -> bytes            # optional, vehicles: bu
 `state` for `make_bsm` is the claimed kinematics:
 `{"seq", "t", "x", "y", "speed", "heading", "vx", "vy"}` (already falsified for
 attacker vehicles). Without `make_bsm` a plain unsigned 200-byte BSM is sent.
+The BSM goes on air after `node.processing_delay(app.bsm_sign_op)` (default op
+`"bsm_sign"`), the time to sign it.
 
 Protocol code calls only (from `network.hooks`):
 
@@ -65,29 +73,52 @@ send(node, destination, data)             # destination: BROADCAST or a node id
 schedule(delay, callback, *args)
 node.send(destination, data, delay=0.0)   # same, with a processing delay
 node.schedule(delay, callback, *args)
+node.backbone_send(rsu, data, delay=0.0)  # RSUs only: wired RSU-to-RSU link, --backbone-ms latency
 ```
+
+Order at start-up: `create_vehicle` for every vehicle, then `create_rsu` for every
+RSU, then `setup(env)`, then the RSUs' `on_start` at t = 0.
 
 Useful attributes and helpers on `node`:
 
 | | |
 |---|---|
 | `node.id`, `node.name`, `node.kind` | node id (network address), `"veh12"` / `"rsu3"`, `"vehicle"` / `"rsu"` |
-| `node.last_sender` | node id of the sender of the message being handled (reply address) |
+| `node.last_sender` | node id of the sender of the message being handled (reply address); valid only inside `on_receive`, so save it (or use the `src` argument) before scheduling a later reply |
 | `node.ledger` | RSUs only: local ledger copy, see below |
 | `node.detector` | Person 4's `check(bsm, history)` or `None` |
 | `node.position()`, `node.velocity()`, `node.speed()`, `node.heading()` | true kinematics |
 | `node.nearby_rsus(radius=None)` | `[(rsu_node, distance)]`, closest first, for make-before-break |
-| `node.processing_delay(op)` | seconds for `"prove"`, `"verify"`, `"sign"`, ... from `--compute-times` |
+| `node.processing_delay(op)` | seconds for an operation from `--compute-times` (0 if unknown), see below |
 | `node.log(event, nbytes, latency_ms, result)` | one row in the metrics CSV |
 | `node.env` | shared: `vehicles`, `rsus`, `bridge`, `ta_ledger`, `rng`, `config`, `shared` |
 
 Protocol code never imports ns-3.
 
+### Processing delays (`--compute-times`)
+
+`python -m protocol.measure` times Person 3's real implementation on this machine
+(`--scale k` for slower vehicle hardware) and writes `protocol/compute_times.json`;
+`python experiments/measure_ecdsa.py --merge protocol/compute_times.json` adds the
+ECDSA baseline as `experiments/compute_times_all.json`. `run_scenario.py` uses the
+first of these two files that exists unless `--compute-times` is given
+(`--compute-times none` for zero delays). The file used is in `config.json`.
+
+| op | charged where (protocol/sim_app.py) |
+|---|---|
+| `verify_sig` + `prove` | vehicle: check the beacon signature, then the Schnorr ZKP, before AUTH_REQ |
+| `merkle_check` + `verify` (+ `sign`) | RSU: membership + ZKP check (+ ticket signature) before AUTH_RESP |
+| `verify_sig` + `sign` | vehicle: target beacon check + request signature before HANDOVER_REQ |
+| 2 × `verify_sig` | RSU: ticket + request signature before the handover answer |
+| `sign` per neighbour | RSU: each PREAUTH note |
+| `bsm_sign` | vehicle: every BSM |
+| `ecdsa_sign`, `ecdsa_verify` | the ECDSA baseline (experiments/baselines) |
+
 ### Local ledger copy for RSUs (`node.ledger`)
 
 Reads are instant in simulated time: `get_auth(pid_hash)`, `is_revoked(pid)`,
-`revoked()`, `get_trace(req_id)`, `get_policy(service)`, `get_root(epoch)`,
-`current_root()`.
+`revoked()`, `get_trace(req_id)`, `traces()` (all trace requests), `get_policy(service)`,
+`get_root(epoch)`, `current_root()`.
 
 Writes return at once and become visible to every RSU after the commit time
 reported by the ledger: `record_auth(pid_hash, service, cls, expiry)`,
@@ -99,26 +130,38 @@ setup-time writes that must be visible at t = 0 go through
 
 ## 4. Ledger API (Person 2 → Persons 3, 4)
 
+The gateway contract is Person 2's: [ledger/gateway/README.md](../ledger/gateway/README.md)
+(the same routes run in memory in `ledger/mock/mock_ledger_server.py`).
+Check a gateway with `python -m network.ledger_check <url>`.
+
 The scenario calls the ledger through `call(caller, fn, **args)`, with `fn` the
-chaincode function in snake_case. Writes must return `{"txId", "commitMs"}`.
+chaincode function in snake_case. Writes return `{"txId", "commitMs", ...}`.
+`network/ledger_client.py:RestLedgerClient` translates each call to the gateway:
 
 | fn | args | REST (gateway) |
 |---|---|---|
 | `register_root` | `epoch, merkle_root, valid_until` | `POST /roots` |
-| `set_policy` | `service, classes` | `POST /policies` |
-| `record_auth` | `pid_hash, service, cls, expiry` | `POST /auth-records` |
-| `get_auth` | `pid_hash` | `GET /auth-records/{pidHash}` |
-| `report_misbehaviour` | `pid, evidence_hash` | `POST /reports` → may include `revoked` |
+| `set_policy` | `service, classes` | `PUT /policies/{service}` |
+| `record_auth` | `pid_hash, service, cls, expiry` | `POST /auth-records` (`pid`, `class`) |
+| `get_auth` | `pid_hash` | `GET /auth-records/{pid}` |
+| `report_misbehaviour` | `pid, evidence_hash` | `POST /reports` → `revoked`, `reportCount` |
 | `is_revoked` | `pid` | `GET /revoked/{pid}` |
-| `get_revoked_since` | `since` | `GET /revoked?since=` → `{"revoked": [...], "cursor": n}` |
-| `request_trace` | `req_id, pid, reason` | `POST /traces` |
+| `get_revoked_since` | `since` | `GET /revoked?since=` (ms) → `{"revoked": [...], "cursor": n}` |
+| `request_trace` | `req_id, pid, reason` | `POST /traces` (pid must already be revoked) |
 | `approve_trace` | `req_id` | `POST /traces/{reqId}/approve` |
 | `get_trace` | `req_id` | `GET /traces/{reqId}` → `{"trace": {..., "approvals": [...], "approved": bool}}` |
-| `revoke` | `pids, reason` | `POST /revocations` |
+| `revoke` | `pids, reason` | `POST /traces/{reqId}/revoke` (the approved trace of one of the pids) |
 
-- The caller identity (`TA`, `rsu0`, `rsu1`, ...) travels in the HTTP header
-  `X-Identity` (change with `--identity-header`); the gateway maps it to that
-  identity's Fabric certificate. A wrong caller gets HTTP 403.
+- The caller identity travels in the HTTP header `X-Identity` (change with
+  `--identity-header`): `TA` is sent as `ta1`, RSUs as `rsu0`, `rsu1`, ... The
+  Fabric gateway only knows the identities in `ledger/gateway/identities.json`;
+  set `LEDGER_RSU_IDENTITIES=rsu1,rsu2,rsu3,rsu4` to fold the scenario's RSUs onto
+  them (RSUs sharing an identity then count as one reporter). A wrong caller gets HTTP 403.
+- The gateway wants 64-hex pids, wall-clock ms times and `[a-z0-9-]` service names.
+  The client hashes pids (salted per run, so runs never collide), turns simulated
+  seconds into future ms and returns the scenario's own values on reads.
+- On its first call the client sets the gateway config (`PUT /config`) to the
+  scenario's `--report-k` and `--trace-threshold`.
 - `ledger/mock_ledger.py` should expose `MockLedger` with either
   `call(caller, fn, **args)` or one method per fn taking `caller` first. Until it
   exists, `--ledger mock` falls back to `network/ledger_client.py:InMemoryLedger`.
@@ -142,7 +185,7 @@ sim_time,node,event,bytes,latency_ms,result
 ```
 
 Events written by the network layer: `TX_<TYPE>`, `RX_<TYPE>` (with the
-one-way delay as `latency_ms`; BSMs only with `--log-bsm`), `CBR` (each RSU,
+one-way delay as `latency_ms`; BSMs and beacons only with `--log-bsm`), `CBR` (each RSU,
 every second, ratio in `result`), `ENTER`, `LEAVE`, `ATTACK_START`,
 `BEACON_RATE`, `LEDGER_SUBMIT` (commit time), `LEDGER_VISIBLE` (time until
 other RSUs see the write), `LEDGER_DENIED`, `LEDGER_ERROR`, `REVOKED_VISIBLE`.

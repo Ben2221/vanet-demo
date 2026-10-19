@@ -35,8 +35,8 @@ def world(k=3, w=20):
     (sk1, pk1), (sk2, pk2) = keygen(), keygen()
     trusted = {"RSU-1": pk1, "RSU-2": pk2}
     detector = types.SimpleNamespace(check=det.check)
-    rsus = [RSU("RSU-1", ledger, sk1, pk1, trusted_rsu_keys=trusted, detector=detector, detector_k=k, detector_w=w),
-            RSU("RSU-2", ledger, sk2, pk2, trusted_rsu_keys=trusted, detector=detector, detector_k=k, detector_w=w)]
+    rsus = [RSU("RSU-1", ledger.view("RSU-1"), sk1, pk1, trusted_rsu_keys=trusted, detector=detector, detector_k=k, detector_w=w),
+            RSU("RSU-2", ledger.view("RSU-2"), sk2, pk2, trusted_rsu_keys=trusted, detector=detector, detector_k=k, detector_w=w)]
     vehicle = Vehicle(pseudonyms, "car", trusted_rsu_keys=trusted)
     res = rsus[0].authenticate(vehicle.make_auth_request(rsus[0].beacon(), "road_access"))
     assert res["ok"], res

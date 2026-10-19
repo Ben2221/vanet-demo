@@ -1,20 +1,195 @@
-"""Validated deterministic JSON wire messages for the VANET Cryptography and Authentication Protocol.
+"""Compact binary wire messages for the VANET Cryptography and Authentication Protocol.
 
-Specifications & Documented Sizes (IEEE 802.11p ns-3 packet payload):
-- BEACON: ~280-350 bytes (RSU ID, fresh nonce, 64-bit timestamp, Schnorr signature R+s, RSU compressed pubkey)
-- AUTH_REQ: ~480-600 bytes (Pseudonym ID, compressed pubkey, epoch, Merkle path, Schnorr ZKP commitment+response, service, class, nonce, ts, rsu_id)
-- AUTH_RESP: ~320-400 bytes (Status ok, signed ticket containing pid, service, class, issuer, expiry, and RSU signature)
-- HANDOVER_REQ: ~350-450 bytes (Signed ticket from previous RSU, destination RSU ID)
-- PREAUTH: ~380-480 bytes (RSU-to-RSU backbone notification with ticket, sender RSU signature, target RSU)
-- BSM: ~350-500 bytes (Safety payload: position x/y/z, speed, heading, timestamp, ticket, vehicle signature, vehicle pubkey)
+Wire format (docs/interfaces.md, section 2):
+
+    [type: u8] [version: u8] [fields: tagged value]
+
+The first byte is the message type (1 BEACON, 2 AUTH_REQ, 3 AUTH_RESP,
+4 HANDOVER_REQ, 5 PREAUTH, 6 BSM), so the network can classify packets
+without parsing them. Fields are a self-describing binary encoding of the same
+dict the protocol code works with. Lowercase hex strings (keys, signatures,
+hashes, nonces) are carried as raw bytes and common field names and values
+are one-byte references, so a message is 40-60 % of the size of the JSON form.
+Signatures are still computed over canonical JSON of the payload, which the
+decoder reproduces exactly.
+
+Typical sizes in bytes (UDP payload in ns-3), 500 pseudonyms per epoch
+(Merkle depth 9; each extra level adds 36 bytes to AUTH_REQ):
+- BEACON:       ~160 (RSU id, 16-byte nonce, timestamp, Schnorr signature R+s, RSU public key)
+- AUTH_REQ:     ~530 (pid, public key, epoch, Merkle path, Schnorr proof, service, class, nonce, ts, rsu id)
+- AUTH_RESP:    ~210 (status, signed ticket: pid, public key, service, class, issuer, issued/expiry)
+- HANDOVER_REQ: ~290 (ticket, target RSU, beacon nonce, timestamp, pseudonym signature)
+- PREAUTH:      ~280 (ticket, source/target RSU, timestamp, RSU signature)
+- BSM:          ~330 (seq, t, x, y, speed, heading, ticket, pseudonym signature)
 """
 from __future__ import annotations
-import json
+import re
+import struct
 from dataclasses import dataclass
 from typing import Any
 
-SUPPORTED_TYPES = {"BEACON", "AUTH_REQ", "AUTH_RESP", "HANDOVER_REQ", "PREAUTH", "BSM"}
+TYPE_CODES = {"BEACON": 1, "AUTH_REQ": 2, "AUTH_RESP": 3, "HANDOVER_REQ": 4, "PREAUTH": 5, "BSM": 6}
+TYPE_NAMES = {v: k for k, v in TYPE_CODES.items()}
+SUPPORTED_TYPES = set(TYPE_CODES)
+WIRE_VERSION = 1
 MAX_MESSAGE_BYTES = 1_000_000
+MAX_DEPTH = 16
+
+# Interned strings: field names and common values sent as one byte.
+# Append only: changing an index changes the wire format.
+INTERNED = [
+    "payload", "signature", "public_key", "rsu_id", "nonce", "timestamp", "pid", "epoch",
+    "merkle_path", "proof", "commitment", "response", "service", "vehicle_class", "ok", "ticket",
+    "reason", "next_rsu_id", "source_rsu", "target_rsu", "fields", "issuer", "issued_at", "expiry",
+    "class", "pk", "R", "s", "left", "right", "car", "truck", "emergency", "road_access",
+    "seq", "t", "x", "y", "speed", "heading", "handover", "authenticated", "handover_accepted",
+    "revoked", "policy_denied", "not_registered", "invalid_proof", "stale_request",
+    "invalid_or_replayed_nonce", "unknown_or_expired_epoch", "missing_shared_authorization",
+]
+_INTERN_INDEX = {s: i for i, s in enumerate(INTERNED)}
+_HEX = re.compile(r"^(?:[0-9a-f]{2})+$")
+
+T_NONE, T_FALSE, T_TRUE, T_INT, T_FLOAT, T_STR, T_HEX, T_LIST, T_DICT, T_INTERN = range(10)
+_F64 = struct.Struct("!d")
+
+
+def _varint(n: int, out: bytearray) -> None:
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            return
+
+
+def _encode(value: Any, out: bytearray, depth: int = 0) -> None:
+    if depth > MAX_DEPTH:
+        raise ValueError("message nested too deeply")
+    if value is None:
+        out.append(T_NONE)
+    elif value is True:
+        out.append(T_TRUE)
+    elif value is False:
+        out.append(T_FALSE)
+    elif isinstance(value, int):
+        out.append(T_INT)
+        _varint((value << 1) if value >= 0 else ((-value << 1) - 1), out)
+    elif isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("NaN and infinity are not allowed")
+        out.append(T_FLOAT)
+        out += _F64.pack(value)
+    elif isinstance(value, str):
+        if value in _INTERN_INDEX:
+            out.append(T_INTERN)
+            out.append(_INTERN_INDEX[value])
+        elif _HEX.match(value):
+            raw = bytes.fromhex(value)
+            out.append(T_HEX)
+            _varint(len(raw), out)
+            out += raw
+        else:
+            raw = value.encode("utf-8")
+            out.append(T_STR)
+            _varint(len(raw), out)
+            out += raw
+    elif isinstance(value, (list, tuple)):
+        out.append(T_LIST)
+        _varint(len(value), out)
+        for item in value:
+            _encode(item, out, depth + 1)
+    elif isinstance(value, dict):
+        out.append(T_DICT)
+        _varint(len(value), out)
+        for k, v in value.items():
+            if not isinstance(k, str):
+                raise ValueError("field names must be strings")
+            _encode(k, out, depth + 1)
+            _encode(v, out, depth + 1)
+    else:
+        raise ValueError(f"cannot encode {type(value).__name__}")
+
+
+class _Reader:
+    def __init__(self, data: bytes, pos: int) -> None:
+        self.data, self.pos = data, pos
+
+    def byte(self) -> int:
+        if self.pos >= len(self.data):
+            raise ValueError("truncated message")
+        b = self.data[self.pos]
+        self.pos += 1
+        return b
+
+    def take(self, n: int) -> bytes:
+        if self.pos + n > len(self.data):
+            raise ValueError("truncated message")
+        chunk = self.data[self.pos:self.pos + n]
+        self.pos += n
+        return chunk
+
+    def varint(self) -> int:
+        n = shift = 0
+        while True:
+            b = self.byte()
+            n |= (b & 0x7F) << shift
+            if not b & 0x80:
+                return n
+            shift += 7
+            if shift > 63:
+                raise ValueError("varint too long")
+
+    def value(self, depth: int = 0) -> Any:
+        if depth > MAX_DEPTH:
+            raise ValueError("message nested too deeply")
+        tag = self.byte()
+        if tag == T_NONE:
+            return None
+        if tag == T_FALSE:
+            return False
+        if tag == T_TRUE:
+            return True
+        if tag == T_INT:
+            z = self.varint()
+            return (z >> 1) if not z & 1 else -((z + 1) >> 1)
+        if tag == T_FLOAT:
+            return _F64.unpack(self.take(8))[0]
+        if tag == T_STR:
+            return self.take(self.varint()).decode("utf-8")
+        if tag == T_HEX:
+            return self.take(self.varint()).hex()
+        if tag == T_INTERN:
+            idx = self.byte()
+            if idx >= len(INTERNED):
+                raise ValueError("unknown interned string")
+            return INTERNED[idx]
+        if tag == T_LIST:
+            n = self.varint()
+            if n > len(self.data):
+                raise ValueError("invalid list length")
+            return [self.value(depth + 1) for _ in range(n)]
+        if tag == T_DICT:
+            n = self.varint()
+            if n > len(self.data):
+                raise ValueError("invalid dict length")
+            out = {}
+            for _ in range(n):
+                k = self.value(depth + 1)
+                if not isinstance(k, str):
+                    raise ValueError("field names must be strings")
+                out[k] = self.value(depth + 1)
+            return out
+        raise ValueError(f"unknown value tag {tag}")
+
+
+def message_type(data: bytes) -> str:
+    """Name of a message from its first byte (used by the network for logs and EDCA class)."""
+    if not data:
+        return "EMPTY"
+    return TYPE_NAMES.get(data[0], f"T{data[0]}")
+
 
 @dataclass
 class Message:
@@ -26,23 +201,28 @@ class Message:
             raise ValueError(f"unsupported message type: {self.type}")
         if not isinstance(self.fields, dict):
             raise ValueError("message fields must be an object")
-        raw = json.dumps({"version": 1, "type": self.type, "fields": self.fields},
-                         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-                         allow_nan=False).encode("utf-8")
-        if len(raw) > MAX_MESSAGE_BYTES:
+        out = bytearray((TYPE_CODES[self.type], WIRE_VERSION))
+        _encode(self.fields, out)
+        if len(out) > MAX_MESSAGE_BYTES:
             raise ValueError("message too large")
-        return raw
+        return bytes(out)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "Message":
-        if not isinstance(data, (bytes, bytearray)) or len(data) > MAX_MESSAGE_BYTES:
+        if not isinstance(data, (bytes, bytearray)) or len(data) > MAX_MESSAGE_BYTES or len(data) < 3:
             raise ValueError("invalid or oversized message")
-        obj = json.loads(bytes(data).decode("utf-8"))
-        if not isinstance(obj, dict) or obj.get("version") != 1:
-            raise ValueError("invalid message envelope or version")
-        if obj.get("type") not in SUPPORTED_TYPES or not isinstance(obj.get("fields"), dict):
-            raise ValueError("invalid message type or fields")
-        return cls(obj["type"], obj["fields"])
+        data = bytes(data)
+        if data[0] not in TYPE_NAMES:
+            raise ValueError("invalid message type")
+        if data[1] != WIRE_VERSION:
+            raise ValueError("invalid message version")
+        reader = _Reader(data, 2)
+        fields = reader.value()
+        if not isinstance(fields, dict):
+            raise ValueError("message fields must be an object")
+        if reader.pos != len(data):
+            raise ValueError("trailing bytes after message")
+        return cls(TYPE_NAMES[data[0]], fields)
 
 def make_message(message_type: str, **fields) -> Message:
     return Message(message_type, fields)

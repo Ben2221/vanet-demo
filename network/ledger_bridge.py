@@ -39,7 +39,7 @@ class LedgerCache:
 class LedgerBridge:
     def __init__(self, client, now: Callable[[], float], schedule: Callable[[float, Callable], None],
                  log: Callable[..., None] | None = None, sync_interval: float = 1.0,
-                 workers: int = 8) -> None:
+                 workers: int = 8, sync_identity: str = "TA") -> None:
         self.client = client
         self.now = now
         self.schedule = schedule
@@ -50,6 +50,7 @@ class LedgerBridge:
         self.commit_ms: list[float] = []
         self.visibility_lag_ms: list[float] = []   # extra delay when Fabric was slower than simulated time
         self.sync_interval = sync_interval
+        self.sync_identity = sync_identity          # who reads the revocation list for the sync
         self._cursor = 0
         self._views: dict[str, LedgerView] = {}
 
@@ -156,7 +157,7 @@ class LedgerBridge:
     def _sync(self) -> None:
         """Pick up revocations made outside this scenario (real Fabric only)."""
         try:
-            res = self.client.call("rsu0", "get_revoked_since", since=self._cursor)
+            res = self.client.call(self.sync_identity, "get_revoked_since", since=self._cursor)
             self._mark_revoked(res.get("revoked", []))
             self._cursor = res.get("cursor", self._cursor)
         except LedgerError as e:
@@ -195,6 +196,10 @@ class LedgerView:
 
     def get_trace(self, req_id: str) -> dict | None:
         return self.bridge.cache.traces.get(req_id)
+
+    def traces(self) -> dict[str, dict]:
+        """All trace requests visible so far, {req_id: trace} (a copy)."""
+        return dict(self.bridge.cache.traces)
 
     def get_policy(self, service: str) -> list | None:
         return self.bridge.cache.policies.get(service)

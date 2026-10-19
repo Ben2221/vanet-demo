@@ -1,4 +1,9 @@
-"""Vehicle-side protocol logic, independent of ns-3."""
+"""Vehicle-side protocol logic, independent of ns-3.
+
+All times come from ``clock`` (default: wall clock). In the simulator it is the
+simulated clock (``node.now``), so freshness windows and ticket expiry follow
+simulated time.
+"""
 from __future__ import annotations
 import json, time
 from typing import Callable, Any
@@ -20,19 +25,22 @@ class Vehicle:
     def __init__(self, pseudonyms: list[Pseudonym], vehicle_class: str = "car",
                  trusted_rsu_keys: dict[str, bytes] | None = None, freshness_seconds: float = 5.0,
                  pseudonym_switch_after: int = 3,
-                 send_fn: Callable[[Any, str, bytes], None] | None = None,
-                 schedule_fn: Callable[[float, Callable], None] | None = None):
+                 send_fn: Callable[[Any, Any, bytes], None] | None = None,
+                 schedule_fn: Callable[[float, Callable], None] | None = None,
+                 clock: Callable[[], float] = time.time):
         if not pseudonyms:
             raise ValueError("vehicle needs at least one pseudonym")
         self.pseudonyms = pseudonyms
         self.vehicle_class = vehicle_class
-        self.session_count = 0
+        self.pid_index = 0
+        self.sessions_on_current = 0    # authentications + handovers with the current pseudonym
         self.ticket = None
-        self.trusted_rsu_keys = trusted_rsu_keys or {}
+        self.trusted_rsu_keys = trusted_rsu_keys if trusted_rsu_keys is not None else {}
         self.freshness_seconds = freshness_seconds
         if pseudonym_switch_after < 1:
             raise ValueError("pseudonym_switch_after must be positive")
         self.pseudonym_switch_after = pseudonym_switch_after
+        self.clock = clock
         # Pool of precomputed commitments (g^r computed while idle)
         self.commitment_pool = CommitmentPool(initial_size=5)
         # Node hooks (Network simulation node interface)
@@ -42,8 +50,20 @@ class Vehicle:
 
     @property
     def current(self) -> Pseudonym:
-        index = (self.session_count // self.pseudonym_switch_after) % len(self.pseudonyms)
-        return self.pseudonyms[index]
+        return self.pseudonyms[self.pid_index % len(self.pseudonyms)]
+
+    def change_pseudonym(self) -> Pseudonym:
+        """Switch to the next pseudonym. The ticket belongs to the old one, so drop it."""
+        self.pid_index += 1
+        self.sessions_on_current = 0
+        self.ticket = None
+        self.current_rsu_id = None
+        return self.current
+
+    def ticket_valid(self, margin: float = 0.0) -> bool:
+        if self.ticket is None:
+            return False
+        return float(self.ticket["payload"]["expiry"]) - margin > self.clock()
 
     def verify_beacon(self, beacon: dict) -> bool:
         try:
@@ -53,7 +73,7 @@ class Vehicle:
             if trusted_key is None or bytes.fromhex(beacon["public_key"]) != trusted_key:
                 return False
             ts = float(payload["timestamp"])
-            if abs(time.time() - ts) > self.freshness_seconds:
+            if abs(self.clock() - ts) > self.freshness_seconds:
                 return False
             return schnorr_verify(trusted_key, canonical_json(payload), beacon["signature"])
         except Exception:
@@ -62,6 +82,8 @@ class Vehicle:
     def make_auth_request(self, beacon: dict, service: str) -> bytes:
         if not self.verify_beacon(beacon):
             raise ValueError("untrusted, invalid, or stale RSU beacon")
+        if self.sessions_on_current >= self.pseudonym_switch_after:
+            self.change_pseudonym()
         p = self.current
         if p.merkle_path is None:
             raise RuntimeError("pseudonym has not been registered")
@@ -70,47 +92,66 @@ class Vehicle:
         # Use precomputed commitment from pool (zero-knowledge, non-reused r)
         commitment = self.commitment_pool.pop()
         proof = prove(p.secret, ctx, commitment=commitment)
-        self.current_rsu_id = b["rsu_id"]
         return make_message("AUTH_REQ", pid=p.pid, public_key=p.public_key.hex(),
                             epoch=p.epoch, merkle_path=p.merkle_path, proof=proof.to_dict(),
                             service=service, vehicle_class=self.vehicle_class,
                             timestamp=b["timestamp"], nonce=b["nonce"], rsu_id=b["rsu_id"]).to_bytes()
 
     def accept_ticket(self, ticket: dict, rsu_public_key: bytes) -> bool:
+        """Store a ticket from an RSU. Only a ticket for the current pseudonym and key is accepted."""
         try:
             payload, signature = ticket["payload"], ticket["signature"]
             if not isinstance(payload, dict) or not isinstance(signature, dict):
                 return False
-            if float(payload["expiry"]) <= time.time() or float(payload["issued_at"]) > time.time() + 1:
+            p = self.current
+            if payload.get("pid") != p.pid or payload.get("pk") != p.public_key.hex():
+                return False
+            now = self.clock()
+            if float(payload["expiry"]) <= now or float(payload["issued_at"]) > now + 1:
                 return False
             if not schnorr_verify(rsu_public_key, canonical_json(payload), signature):
                 return False
             self.ticket = ticket
-            self.session_count += 1
+            self.sessions_on_current += 1
+            self.current_rsu_id = str(payload.get("issuer"))
             return True
         except Exception:
             return False
 
+    def handover_accepted(self, rsu_id: str) -> None:
+        self.sessions_on_current += 1
+        self.current_rsu_id = rsu_id
+
     def make_bsm(self, **safety_fields) -> bytes:
-        """Create a signed BSM carrying the current pseudonym and current ticket."""
+        """Create a signed BSM carrying the current pseudonym and current ticket.
+        The verifying key is the one in the ticket, so no separate key is sent."""
         p = self.current
         if self.ticket is None:
             raise RuntimeError("cannot send authenticated BSM without a ticket")
         payload = {"pid": p.pid, "fields": safety_fields, "ticket": self.ticket}
         signature = schnorr_sign(p.secret, canonical_json(payload))
-        return make_message("BSM", payload=payload, signature=signature,
-                            public_key=p.public_key.hex()).to_bytes()
+        return make_message("BSM", payload=payload, signature=signature).to_bytes()
 
-    def make_handover_request(self, next_rsu_id: str) -> bytes:
+    def make_handover_request(self, next_rsu_id: str, nonce: str = "") -> bytes:
+        """Handover request signed with the pseudonym key, so a sniffed ticket alone is useless.
+        ``nonce`` is the target RSU's beacon nonce (prevents replay at that RSU)."""
         if self.ticket is None:
             raise RuntimeError("no authorization ticket to hand over")
-        return make_message("HANDOVER_REQ", ticket=self.ticket, next_rsu_id=next_rsu_id).to_bytes()
+        payload = {"ticket": self.ticket, "next_rsu_id": next_rsu_id, "nonce": nonce,
+                   "timestamp": float(self.clock())}
+        signature = schnorr_sign(self.current.secret, canonical_json(payload))
+        return make_message("HANDOVER_REQ", signature=signature, **payload).to_bytes()
 
     def make_before_break_handover(self, next_rsu_id: str, next_rsu_beacon: dict | None = None) -> bytes:
         """Make-before-break handover: request handover with next RSU while still covered by current RSU."""
-        if next_rsu_beacon is not None and not self.verify_beacon(next_rsu_beacon):
-            raise ValueError("untrusted or invalid target RSU beacon for make-before-break handover")
-        return self.make_handover_request(next_rsu_id)
+        nonce = ""
+        if next_rsu_beacon is not None:
+            if not self.verify_beacon(next_rsu_beacon):
+                raise ValueError("untrusted or invalid target RSU beacon for make-before-break handover")
+            if next_rsu_beacon["payload"]["rsu_id"] != next_rsu_id:
+                raise ValueError("beacon is from a different RSU")
+            nonce = next_rsu_beacon["payload"]["nonce"]
+        return self.make_handover_request(next_rsu_id, nonce)
 
     def on_receive(self, node: Any, data: bytes, sim_time: float) -> dict[str, Any] | None:
         """Network node hook: called when bytes arrive over radio."""
@@ -121,10 +162,14 @@ class Vehicle:
 
         if msg.type == "AUTH_RESP":
             f = msg.fields
-            if f.get("ok") and "ticket" in f:
+            if f.get("pid") not in (None, self.current.pid):
+                return None                 # response for another vehicle
+            if f.get("ok") and f.get("ticket"):
                 issuer = f["ticket"].get("payload", {}).get("issuer")
                 issuer_key = self.trusted_rsu_keys.get(issuer)
-                if issuer_key:
-                    self.accept_ticket(f["ticket"], issuer_key)
+                if not issuer_key or not self.accept_ticket(f["ticket"], issuer_key):
+                    return {**f, "ok": False, "reason": "ticket_not_accepted"}
+            elif f.get("ok") and f.get("handover"):
+                self.handover_accepted(str(f.get("rsu_id")))
             return f
         return None

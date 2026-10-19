@@ -30,6 +30,7 @@ from network.metrics import MetricsLog, NetStats
 DEFAULT_TYPES = {1: "BEACON", 2: "AUTH_REQ", 3: "AUTH_RESP", 4: "HANDOVER_REQ",
                  5: "PREAUTH", 6: "BSM", 7: "HANDOVER_RESP", 8: "ECHO"}
 HIGH_PRIORITY = {"BSM", "BEACON"}       # sent on AC_VO, everything else on AC_BE
+PERIODIC = {"BSM", "BEACON"}            # 10 Hz traffic: TX_/RX_ rows only with --log-bsm
 
 
 @dataclass
@@ -77,7 +78,7 @@ class Scenario:
                  congestion_control: bool = False, cbr_threshold: float = 0.6,
                  pdr_range: float = 300.0, log_bsm: bool = False, detector=None,
                  attacker_ratio: float = 0.0, attack: str = "const_pos", attack_start: float = 0.0,
-                 compute_times: dict | None = None, ledger_sync: float = 1.0,
+                 compute_times: dict | None = None, ledger_sync: float = 1.0, backbone_ms: float = 2.0,
                  config: dict | None = None) -> None:
         self.backend = backend
         self.duration = duration
@@ -86,6 +87,7 @@ class Scenario:
         self.rng = random.Random(seed)
         self.protocol = protocol
         self.log_bsm = log_bsm
+        self.backbone_delay = backbone_ms / 1000.0
         self.compute_times = compute_times or {}
         self.metrics = MetricsLog(self.out_dir / "metrics.csv")
         self.stats = NetStats(pdr_range)
@@ -95,7 +97,8 @@ class Scenario:
         self._msg_type = getattr(protocol, "message_type", None)
 
         self.bridge = LedgerBridge(ledger_client, backend.now, backend.schedule,
-                                   log=self._ledger_log, sync_interval=ledger_sync)
+                                   log=self._ledger_log, sync_interval=ledger_sync,
+                                   sync_identity=rsus[0].name if rsus else "TA")
         self.env = ScenarioEnv(config=config or {}, ledger_client=ledger_client, bridge=self.bridge,
                                ta_ledger=self.bridge.view("TA"), detector=detector,
                                rng=self.rng, out_dir=self.out_dir)
@@ -181,7 +184,7 @@ class Scenario:
         uid = self.backend.send(h.id, dst, data, prio)
         t = self.backend.now()
         self.stats.on_send(uid, h.id, t, mtype, len(data), expected)
-        if mtype != "BSM" or self.log_bsm:
+        if mtype not in PERIODIC or self.log_bsm:
             dst_name = "broadcast" if dst == BROADCAST else self.node_by_id[dst].name
             self.metrics.log(t, h.name, f"TX_{mtype}", len(data), None, dst_name)
 
@@ -195,13 +198,45 @@ class Scenario:
         if not h.active:
             return
         mtype = self.msg_type(data)
-        if mtype != "BSM" or self.log_bsm:
+        if mtype not in PERIODIC or self.log_bsm:
             src_name = self.node_by_id[src].name if src in self.node_by_id else str(src)
             self.metrics.log(t, h.name, f"RX_{mtype}", len(data), delay_ms, src_name)
-        h.last_sender = src
-        app = h.app
-        if app is None:
+        self._deliver(h, src, data, t)
+
+    def backbone_send(self, h: NodeHandle, dst: int, data: bytes, delay: float = 0.0) -> None:
+        """RSU-to-RSU wired backbone: fixed latency, no radio, no PDR accounting."""
+        mtype = self.msg_type(data)
+        dst_h = self.node_by_id[dst]
+
+        def sent() -> None:
+            t0 = self.backend.now()
+            self.metrics.log(t0, h.name, f"TX_{mtype}", len(data), None, f"backbone:{dst_h.name}")
+
+            def arrive() -> None:
+                t = self.backend.now()
+                self.metrics.log(t, dst_h.name, f"RX_{mtype}", len(data), (t - t0) * 1000, f"backbone:{h.name}")
+                self._deliver(dst_h, h.id, data, t)
+
+            self.backend.schedule(self.backbone_delay, arrive)
+
+        if delay > 0:
+            self.backend.schedule(delay, sent)
+        else:
+            sent()
+
+    def _deliver(self, h: NodeHandle, src: int, data: bytes, t: float) -> None:
+        if h.app is None:
             return
+        # last_sender is valid only while on_receive runs; restored afterwards so a
+        # delivery nested in the handler (zero-delay backbone, ...) cannot leave it wrong
+        prev, h.last_sender = h.last_sender, src
+        try:
+            self._call_app(h, src, data, t)
+        finally:
+            h.last_sender = prev
+
+    def _call_app(self, h: NodeHandle, src: int, data: bytes, t: float) -> None:
+        app = h.app
         fn = app.on_receive
         takes_src = self._rx_takes_src.get(type(app))
         if takes_src is None:

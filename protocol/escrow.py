@@ -48,6 +48,8 @@ class ShamirSecretSharing:
         k = len(shares)
         if k < 1:
             raise ValueError("no shares provided")
+        if len({x for x, _ in shares}) != k:
+            raise ValueError("duplicate share index")
 
         # Lagrange interpolation at x = 0:
         # S = sum_{j=0}^{k-1} y_j * prod_{m != j} (0 - x_m) / (x_j - x_m) mod P
@@ -87,16 +89,20 @@ class RSUEscrowAgent:
         self.ledger = ledger
 
     def release_share(self, req_id: str) -> tuple[int, int]:
-        """Release key share only if GetTrace indicates the request is approved on ledger."""
-        if not hasattr(self.ledger, "is_trace_approved") or not self.ledger.is_trace_approved(req_id):
+        """Release key share only if GetTrace shows the request approved on the ledger."""
+        trace = self.ledger.get_trace(req_id)
+        if not trace or not trace.get("approved"):
             raise PermissionError(f"trace request {req_id} is not approved on the ledger")
         return self.share
 
 class ThresholdIdentityEscrow:
     """Complete TA & RSU Threshold Identity Escrow subsystem."""
-    def __init__(self, threshold: int = 3, rsu_orgs: list[str] | None = None):
-        self.threshold = threshold
+    def __init__(self, threshold: int | None = None, rsu_orgs: list[str] | None = None):
         self.rsu_orgs = rsu_orgs or ["RSU-Org-1", "RSU-Org-2", "RSU-Org-3", "RSU-Org-4", "RSU-Org-5"]
+        # default 2f+1 with f = floor((n-1)/3) tolerated faulty RSU organizations (team decision)
+        self.threshold = threshold if threshold is not None else 2 * ((len(self.rsu_orgs) - 1) // 3) + 1
+        if not 1 <= self.threshold <= len(self.rsu_orgs):
+            raise ValueError("threshold must be between 1 and the number of RSU organizations")
         self.shamir = ShamirSecretSharing()
 
     def escrow_vehicle_identity(self, real_identity: dict[str, Any]) -> tuple[IdentityEscrowRecord, dict[str, tuple[int, int]]]:
