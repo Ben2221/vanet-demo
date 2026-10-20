@@ -31,12 +31,15 @@ class MetricsLog:
         self._w = csv.writer(self._f)
         self._w.writerow(COLUMNS)
         self.rows = 0
+        self.listeners: list = []       # f(sim_time, node, event, bytes, latency_ms, result), e.g. --live
 
     def log(self, sim_time: float, node: str, event: str, nbytes: int = 0,
             latency_ms: float | None = None, result: str = "") -> None:
         self._w.writerow([f"{sim_time:.6f}", node, event, nbytes,
                           "" if latency_ms is None else f"{latency_ms:.3f}", result])
         self.rows += 1
+        for f in self.listeners:
+            f(sim_time, node, event, nbytes, latency_ms, result)
 
     def close(self) -> None:
         self._f.close()

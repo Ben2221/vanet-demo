@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -36,6 +36,8 @@ help:
 	@echo "make ledger-bench   real Fabric: commit latency of Raft vs BFT ordering (Docker, Fabric 3.1.5)"
 	@echo "make show           key numbers of every run under experiments/results/"
 	@echo "make demo           live side-by-side: Phase I vs v3-fast vs v3-private on ns-3 (~3 min)"
+	@echo "make live           narrate one ns-3 run in plain English as it runs (PROFILE=Phase-I|v3-fast|v3-private)"
+	@echo "make replay         replay a finished run the same way (RUN=<run folder> SPEED=4)"
 	@echo "make mock           in-memory ledger REST server on PORT=$(PORT)"
 	@echo "make gateway        Fabric REST gateway on PORT=$(PORT) (needs make fabric-up)"
 	@echo "make fabric-up      install and start Hyperledger Fabric in Docker"
@@ -116,6 +118,18 @@ demo: $(PY)
 	$(DEMO) --profile v3-fast --out experiments/results/demo/v3-fast
 	$(DEMO) --profile v3-private --out experiments/results/demo/v3-private
 	$(PY) experiments/show.py experiments/results/demo/Phase-I experiments/results/demo/v3-fast experiments/results/demo/v3-private
+
+# narrate one ns-3 run in plain English while it runs: who joins, the attack, detection, the
+# blockchain revocation, the attacker shut out (PROFILE=Phase-I for the original design)
+PROFILE ?= v3-fast
+live: $(PY)
+	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --out experiments/results/live/$(PROFILE)
+
+# replay a finished run the same way, without simulating (RUN=<run folder>, SPEED=sim s per s)
+RUN ?= experiments/results/demo/v3-fast
+SPEED ?= 4
+replay: $(PY)
+	$(PY) experiments/live.py $(RUN) --speed $(SPEED)
 
 mock: $(PY)
 	@if ss -ltnH "sport = :$(PORT)" 2>/dev/null | grep -q .; then \

@@ -232,6 +232,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--no-flowmon", action="store_true", help="disable FlowMonitor (ns-3 backend)")
     g.add_argument("--out", default=None, help="output folder (default experiments/results/<name>)")
     g.add_argument("--quiet", action="store_true")
+    g.add_argument("--live", action="store_true",
+                   help="narrate the run in plain English while it runs (experiments/live.py)")
     return ap
 
 
@@ -377,11 +379,20 @@ def main(argv: list[str] | None = None) -> dict:
         attacker_ratio=a.attacker_ratio, attack=a.attack, attack_start=a.attack_start,
         compute_times=compute_times, ledger_sync=a.ledger_sync, backbone_ms=a.backbone_ms, config=config,
     )
+    narrator = None
+    if a.live:
+        from experiments.live import Narrator
+        st = scenario.stats
+        narrator = Narrator(counters=lambda: {"BSMs sent": st.sent_by_type.get("BSM", 0),
+                                              "BSM bytes": st.bytes_by_type.get("BSM", 0)})
+        scenario.metrics.listeners.append(narrator.feed)
     try:
         summary = scenario.run()
     finally:
         if live:
             live.close()
+    if narrator:
+        narrator.finish()
     summary["wall_time_s"] = round(time.time() - t_wall, 1)
     (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
     if not a.quiet:

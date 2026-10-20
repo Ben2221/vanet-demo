@@ -7,6 +7,10 @@ Fabric.
 
 This repository contains the implementation and documentation for our Bachelor Thesis Project (BTP), focused on network simulation using NS-3. It also contains the Hyperledger Fabric ledger setup for the VANET demo, defined in `ledger/` and planned in `chain_structure.md`. For detailed ledger architecture, operation, validation, and AI handoff context, see [`ledger/IMPLEMENTATION_CONTEXT.md`](ledger/IMPLEMENTATION_CONTEXT.md).
 
+New to the topic? [docs/how-it-works.md](docs/how-it-works.md) explains the problem, every
+term, the protocol step by step, what to run and the results, from zero. To watch it work,
+run `make live`, which narrates an ns-3 run in plain English as it happens.
+
 ## Quick start
 
 Linux (Fedora, Ubuntu) or WSL2:
