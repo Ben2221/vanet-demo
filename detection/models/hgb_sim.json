@@ -1,0 +1,106 @@
+{
+ "runs": 12,
+ "messages": 1714571,
+ "attack_messages": 11810,
+ "vehicles": 1200,
+ "threshold": 0.98,
+ "k": 3,
+ "w": 10,
+ "rules_only_validation": {
+  "attackers_reported": 41,
+  "attackers": 41,
+  "honest_reported": 2
+ },
+ "threshold_table": [
+  {
+   "threshold": 0.5,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 149,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.8238519533927348,
+   "message_fpr": 0.016002041193260253
+  },
+  {
+   "threshold": 0.6,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 99,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.8197395476353667,
+   "message_fpr": 0.010314499898130746
+  },
+  {
+   "threshold": 0.7,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 68,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.8126570710532328,
+   "message_fpr": 0.006159757646382309
+  },
+  {
+   "threshold": 0.8,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 46,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.8069453963902216,
+   "message_fpr": 0.0027914079473250275
+  },
+  {
+   "threshold": 0.9,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 14,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.7971213159698424,
+   "message_fpr": 0.0008054335345965121
+  },
+  {
+   "threshold": 0.95,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 4,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.7900388393877085,
+   "message_fpr": 0.00032369669239103323
+  },
+  {
+   "threshold": 0.98,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 2,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.777016221156043,
+   "message_fpr": 0.00024562866657907814
+  },
+  {
+   "threshold": 0.99,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 2,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.7669636737491432,
+   "message_fpr": 0.00022277948829265229
+  },
+  {
+   "threshold": 0.995,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 2,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.7523417866118346,
+   "message_fpr": 0.00022087539010211678
+  },
+  {
+   "threshold": 0.999,
+   "attackers_reported": 41,
+   "attackers": 41,
+   "honest_reported": 2,
+   "honest_reported_rules_only": 2,
+   "message_recall": 0.7157870687685629,
+   "message_fpr": 0.0002189712919115813
+  }
+ ]
+}

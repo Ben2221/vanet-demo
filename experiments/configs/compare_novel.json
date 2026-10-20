@@ -1,0 +1,16 @@
+{
+  "name": "compare_novel",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 120, "backend": "lite", "ledger": "mock", "attacker_ratio": 0.1,
+            "attack": "random_pos", "attack_start": 30,
+            "compute_times": "experiments/compute_times_all.json"},
+  "grid": {"vehicles": [50, 100, 150]},
+  "variants": [
+    {"protocol": "real"},
+    {"protocol": "real", "bsm_ticket": "digest"},
+    {"protocol": "real", "profile": "v2"},
+    {"protocol": "real", "profile": "v2-mac"},
+    {"protocol": "experiments.baselines.ecdsa_pki"},
+    {"protocol": "experiments.baselines.central_auth"}
+  ]
+}

@@ -65,7 +65,13 @@ def collect_run(run_dir: str | Path) -> dict:
         out[f"{name}_ms_mean"] = sum(v) / len(v) if v else None
         out[f"{name}_ms_median"] = _pct(v, 0.5)
         out[f"{name}_ms_p95"] = _pct(v, 0.95)
+    # every way a vehicle gets a ticket: full authentication or --ticket-renewal
+    tickets = lat("AUTH_OK") + lat("RENEW_OK")
+    out["renew_n"] = len(by_event.get("RENEW_OK", []))
+    out["ticket_ms_mean"] = sum(tickets) / len(tickets) if tickets else None
+    out["ticket_ms_p95"] = _pct(tickets, 0.95)
     out["handover_fallbacks"] = len(by_event.get("HANDOVER_FALLBACK", []))
+    out["handovers_per_auth"] = out["handover_n"] / out["auth_n"] if out["auth_n"] else None
     out["auth_rejected"] = len(by_event.get("AUTH_REJECT", [])) + len(by_event.get("AUTH_REJECTED", []))
     out["pdr"] = summary.get("broadcast_pdr")
     out["unicast_pdr"] = summary.get("unicast_pdr")
@@ -80,7 +86,103 @@ def collect_run(run_dir: str | Path) -> dict:
         out["security_bytes_per_bsm"] = mean_bsm - PLAIN_BSM_BYTES
     out["wall_time_s"] = summary.get("wall_time_s")
     out.update(_detection(d, by_event))
+    out.update(_traffic(summary, by_event))
+    out.update(_protocol_stats(d))
+    out.update(_tracking(d))
+    if out.get("mix_silent_s") is not None and out.get("vehicle_seconds"):
+        out["silent_share"] = out["mix_silent_s"] / out["vehicle_seconds"]      # mix-zone safety cost
     return out
+
+
+# ------------------------------------------------------------ v3 numbers
+LEGIT_REJECTS = {"revoked", "quarantined", "expired_or_revoked", "revoked_filter", "expired"}
+
+
+def _vehicle_seconds(by_event: dict[str, list[dict]], duration: float) -> float:
+    """Sum over vehicles of the time they were on the road (ENTER to LEAVE or the end)."""
+    enter = {r["node"]: float(r["sim_time"]) for r in by_event.get("ENTER", [])}
+    leave = {r["node"]: float(r["sim_time"]) for r in by_event.get("LEAVE", [])}
+    return sum(max(0.0, leave.get(v, duration) - t) for v, t in enter.items())
+
+
+def _traffic(summary: dict, by_event: dict[str, list[dict]]) -> dict:
+    """Channel use per vehicle and second, and how much handover / backbone signalling there was."""
+    vs = _vehicle_seconds(by_event, float(summary.get("duration_s") or 0.0))
+    sent, nbytes = summary.get("sent_by_type", {}), summary.get("bytes_by_type", {})
+    out = {"vehicle_seconds": vs,
+           "preauth_msgs": len(by_event.get("TX_PREAUTH", [])),
+           "cluster_switches": len(by_event.get("CLUSTER_SWITCH", [])),
+           "pseudonym_changes": len(by_event.get("PSEUDONYM_CHANGE", []))}
+    if vs > 0:
+        safety = ("BSM", "TESLA_KEY")
+        out["bsm_per_vehicle_s"] = sent.get("BSM", 0) / vs
+        out["safety_bytes_per_vehicle_s"] = sum(nbytes.get(t, 0) for t in safety) / vs
+        out["air_bytes_per_vehicle_s"] = sum(nbytes.values()) / vs
+        out["auth_bytes_per_vehicle_s"] = sum(nbytes.get(t, 0) for t in
+                                              ("AUTH_REQ", "AUTH_RESP", "HANDOVER_REQ")) / vs
+    return out
+
+
+def _protocol_stats(d: Path) -> dict:
+    """Numbers from protocol_stats.json (written by the real protocol's teardown)."""
+    f = d / "protocol_stats.json"
+    if not f.exists():
+        return {}
+    st = json.loads(f.read_text())
+    out: dict = {}
+
+    def ratio(block: dict) -> float | None:
+        bad = sum(n for r, n in block.get("rejected", {}).items() if r not in LEGIT_REJECTS)
+        ok = block.get("accepted", 0)
+        return ok / (ok + bad + block.get("dropped", 0)) if ok + bad + block.get("dropped", 0) else None
+
+    rsu, v2v = st.get("rsu_bsm", {}), st.get("v2v", {})
+    out["rsu_verified_ratio"] = ratio(rsu)
+    out["rsu_accept_ms_mean"] = rsu.get("accept_latency_ms", {}).get("mean")
+    out["rsu_accept_ms_p95"] = rsu.get("accept_latency_ms", {}).get("p95")
+    out["rsu_dropped"] = rsu.get("dropped")
+    if v2v.get("received"):
+        out["v2v_verified_ratio"] = ratio(v2v)
+        out["v2v_accept_ms_mean"] = v2v.get("accept_latency_ms", {}).get("mean")
+        out["v2v_accept_ms_p95"] = v2v.get("accept_latency_ms", {}).get("p95")
+        fr = v2v.get("from_revoked", 0)
+        out["v2v_revoked_accepted_ratio"] = v2v.get("revoked_accepted", 0) / fr if fr else None
+        out["v2v_revoked_accepted"] = v2v.get("revoked_accepted")
+        out["filter_drops_attacker"] = v2v.get("filter_drops_attacker")
+        out["filter_drops_honest"] = v2v.get("filter_drops_honest")
+        out["v2v_dropped"] = v2v.get("dropped")
+    for kind in ("rsu_cpu", "obu_cpu"):
+        c = st.get(kind) or {}
+        if c:
+            out[f"{kind}_util_mean"] = c.get("util_mean")
+            out[f"{kind}_util_max"] = c.get("util_max")
+            out[f"{kind}_batch_mean"] = c.get("batch_mean")
+    aw = st.get("awareness_error_m", {})
+    out["awareness_error_m_mean"] = aw.get("mean")
+    out["awareness_error_m_p95"] = aw.get("p95")
+    out["tesla_key_msgs"] = st.get("tesla_key_msgs")
+    out["renewals"] = st.get("renewals")
+    out["signed_share"] = (st.get("signed_bsms", 0) / (st.get("signed_bsms", 0) + st.get("tesla_bsms", 0))
+                           if st.get("signed_bsms", 0) + st.get("tesla_bsms", 0) else None)
+    out["mix_silent_s"] = st.get("mix_silent_s")
+    out["mix_changes"] = st.get("mix_changes")
+    out["faulty_reports"] = st.get("faulty_reports")
+    fb = st.get("filter_bytes", {})
+    out["filter_bytes_mean"] = fb.get("mean")
+    return out
+
+
+def _tracking(d: Path) -> dict:
+    """Tracking attack on observed_bsms.csv (--privacy-log); cached in tracking.json."""
+    obs, cache = d / "observed_bsms.csv", d / "tracking.json"
+    if not obs.exists():
+        return {}
+    if cache.exists() and cache.stat().st_mtime >= obs.stat().st_mtime:
+        return json.loads(cache.read_text())
+    from experiments.tracker import analyse
+    res = analyse(obs)
+    cache.write_text(json.dumps(res))
+    return res
 
 
 # ------------------------------------------------------------------- detection
@@ -122,10 +224,22 @@ def _detection(d: Path, by_event: dict[str, list[dict]]) -> dict:
     caught = {v for v in resolved.values() if v in attackers}
     wrong = {v for v in resolved.values() if v not in attackers}
     out["attackers_reported"] = len(caught)
+    # vehicles that lost a pseudonym to revocation: honest ones are the cost of wrong reports
+    revoked_pids = {r["result"].strip() for r in by_event.get("REVOKED_VISIBLE", [])}
+    revoked_veh = {owner[p] for p in revoked_pids if p in owner}
+    out["attackers_revoked"] = len(revoked_veh & set(attackers))
+    out["honest_revoked"] = len(revoked_veh - set(attackers)) if owner else None
     out["detection_rate"] = len(caught) / len(attackers) if attackers and owner else None
     out["honest_reported"] = len(wrong) if owner else None
     delays = [revoked_at[p] - reports[p] for p in revoked_at]
     out["report_to_revocation_s_mean"] = sum(delays) / len(delays) if delays else None
+    blocked_at = dict(revoked_at)           # pid -> first local block (QUARANTINE_BLOCK) or revocation
+    for r in by_event.get("QUARANTINE_BLOCK", []):
+        pid, t = r["result"].strip(), float(r["sim_time"])
+        if pid in reports and t < blocked_at.get(pid, float("inf")):
+            blocked_at[pid] = t
+    blocks = [blocked_at[p] - reports[p] for p in blocked_at]
+    out["report_to_block_s_mean"] = sum(blocks) / len(blocks) if blocks else None
     start = {v: float(a["start"]) for v, a in attackers.items()}
     first = [reports[p] - start[v] for p, v in resolved.items() if v in start and reports[p] >= start[v]]
     out["first_report_delay_s_mean"] = sum(first) / len(first) if first else None

@@ -56,6 +56,52 @@ runs and sweeps as one table. Sweeps (`make quick`, `make compare`,
 `experiments/run.py --config ...`) also write `runs.csv`, `aggregate.csv` (mean and
 95 % CI) and `plots/*.png`.
 
+## v3: the improved protocol and how to compare it
+
+`--profile v3` adds ten mechanisms on top of v2 (each also a single option, see
+[`docs/interfaces.md`](docs/interfaces.md), "v3 options"):
+
+| Mechanism | Option | Improves |
+|---|---|---|
+| TESLA broadcast authentication | `--bsm-auth tesla` | every vehicle can verify BSMs at MAC cost |
+| ECQV implicit-certificate tickets | `--implicit-cert` | ticket 160 → 90 bytes |
+| RSU clusters | `--cluster-size 2` | no handover inside a cluster |
+| Batch signature verification | `--batch-verify` | RSU/vehicle CPU per signed BSM |
+| Dead-reckoning BSM triggering | `--dr-bsm` | far fewer BSMs on the channel |
+| Revocation filter in beacons | `--revocation-filter` | vehicles drop BSMs of revoked senders |
+| Cooperative mix zones | `--mix-zones` | pseudonym changes that a tracker cannot link |
+| BBS anonymous credentials | `--credential bbs` | no pseudonym pools; unlinkable proofs |
+| Trust-weighted revocation | `--trust-weighted` | compromised RSUs cannot keep revoking honest cars |
+| BFT ordering on Fabric | `make ledger-bench` | real n >= 3f+1 consensus, measured against Raft |
+
+Every comparison runs on ns-3:
+
+```bash
+make compare-v3      # ECDSA PKI, central TA, Phase I, v2, v2-mac, v3 at 50/100/150 vehicles (54 runs)
+make ablation-v3     # v2 plus each mechanism alone, 100 vehicles (33 runs)
+make trust-v3        # 2 of 9 RSUs compromised: plain K vs trust-weighted (12 runs)
+make ledger-bench    # real Fabric 3.1.5: Raft 500 ms, Raft 50 ms, BFT (4 orderers)
+```
+
+Where to look afterwards:
+
+| File | What |
+|---|---|
+| `experiments/results/<sweep>/report.md` | one table per vehicle count: every variant, every key metric, mean ± 95 % CI, ↓/↑ = which way is better |
+| `experiments/results/<sweep>/plots/*.png` | one figure per metric (lines over vehicle count, or bars per variant) |
+| `experiments/results/<sweep>/aggregate.csv`, `runs.csv` | the same numbers for your own analysis |
+| `experiments/results/<sweep>/runs/<run>/protocol_stats.json` | everything about one run (latencies, CPU load, V2V results) |
+| `experiments/results/ledger_consensus/summary.json` | Fabric commit latency per setup and rate |
+| `make show` | key numbers of every run and sweep in the terminal |
+
+What is measured and what is modelled: radio, mobility and protocol messages are
+simulated (ns-3, SUMO); every cryptographic operation is executed for real and its
+time comes from `experiments/compute_times_v3.json` (measured on this PC; vehicles
+are assumed 5x slower, `--obu-scale 5`). Batch verification uses the speedup measured
+with the same pure-Python arithmetic for single and batch checks. The trust
+experiment's "investigation" uses the simulation's ground truth. BFT vs Raft is
+measured on a real Fabric network, not simulated.
+
 ## Real ledger (Hyperledger Fabric)
 
 Needs Docker and Node.js 22.12+:

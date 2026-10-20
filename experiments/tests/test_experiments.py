@@ -101,3 +101,40 @@ def test_op_counts_table():
     assert ours["handover_bytes"] < ecdsa["handover_bytes"]        # shared ledger state: smaller handover
     assert central["backbone_round_trips"] == 1 and ours["backbone_round_trips"] == 0
     assert "| scheme |" in op_counts.to_markdown(rows)
+
+
+def test_tracker_links_an_obvious_change_and_not_a_mixed_one(tmp_path):
+    from experiments.tracker import analyse
+    rows = ["t,pid,x,y,speed,heading,vehicle"]
+    # vehicle A drives east at 10 m/s and changes pseudonym at t = 5 after 0.2 s silence
+    rows += [f"{t / 10:.1f},a1,{t:.1f},0,10,90,A" for t in range(0, 50)]
+    rows += [f"{t / 10:.1f},a2,{t:.1f},0,10,90,A" for t in range(52, 100)]
+    # vehicle B far away, no change
+    rows += [f"{t / 10:.1f},b1,{t:.1f},500,10,90,B" for t in range(0, 100)]
+    (tmp_path / "observed_bsms.csv").write_text("\n".join(rows))
+    res = analyse(tmp_path)
+    assert res["pseudonym_changes"] == 1 and res["tracking_success"] == 1.0 and res["traceable_fraction"] == 1.0
+    # two vehicles change at the same junction and swap directions: the tracker cannot tell
+    rows = ["t,pid,x,y,speed,heading,vehicle"]
+    rows += [f"{t / 10:.1f},c1,{t:.1f},0,10,90,C" for t in range(0, 50)]
+    rows += [f"{t / 10:.1f},d1,{-t:.1f},0,10,270,D" for t in range(0, 50)]
+    rows += [f"{6 + t / 10:.1f},c2,50,{t:.1f},10,0,C" for t in range(0, 30)]      # C turns north
+    rows += [f"{6 + t / 10:.1f},d2,{60 + t:.1f},0,10,90,D" for t in range(0, 30)]  # D appears east
+    (tmp_path / "observed_bsms.csv").write_text("\n".join(rows))
+    assert analyse(tmp_path)["tracking_success"] < 1.0
+
+
+def test_report_table(tmp_path):
+    from experiments.report import report
+    rows = [{"label": "Phase-I", "vehicles": "50", "n_seeds": "3", "auth_ms_mean": "1.5", "auth_ms_mean_ci95": "0.1"},
+            {"label": "v3", "vehicles": "50", "n_seeds": "3", "auth_ms_mean": "4.0", "auth_ms_mean_ci95": ""}]
+    with (tmp_path / "aggregate.csv").open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    text = report(tmp_path).read_text()
+    assert "| Phase-I | 1.50 ± 0.10 |" in text and "| v3 | 4.00 |" in text and "auth ms ↓" in text
+
+
+def test_label_is_not_a_scenario_option():
+    assert run.to_args({"label": "v3 (all)", "profile": "v3"}) == ["--profile", "v3"]
