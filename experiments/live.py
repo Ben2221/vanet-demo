@@ -54,7 +54,8 @@ SHOW_ALL = SHOW | {"HANDOVER_OK", "HANDOVER_FALLBACK", "RENEW_OK", "REPORT", "PS
 
 
 class Narrator:
-    def __init__(self, show_all: bool = False, every: float = 5.0, counters=None, out=sys.stdout) -> None:
+    def __init__(self, show_all: bool = False, every: float = 5.0, counters=None, out=sys.stdout,
+                 pace: float = 0.0) -> None:
         self.show = SHOW_ALL if show_all else SHOW
         self.every = every
         self.counters = counters      # live mode: () -> {"BSMs sent": n, ...} from the simulator
@@ -75,6 +76,8 @@ class Narrator:
         self.n = {"handovers": 0, "renewals": 0, "rejected BSMs": 0}
         self.cbr: dict[str, float] = {}
         self.t = 0.0
+        self.pace = pace              # simulated s per wall s, 0 = no waiting
+        self.wall0 = None
 
     def _p(self, s: str = "") -> None:
         print(s, file=self.out, flush=True)
@@ -111,6 +114,12 @@ class Narrator:
 
     def feed(self, t: float, node: str, event: str, nbytes, latency, result: str) -> None:
         t = float(t)
+        if self.pace > 0:
+            # hold the simulator back so simulated time runs at `pace` x wall-clock time
+            self.wall0 = self.wall0 if self.wall0 is not None else time.time() - t / self.pace
+            wait = self.wall0 + t / self.pace - time.time()
+            if wait > 0:
+                time.sleep(wait)
         while t >= self.next_status:
             self.status(self.next_status)
             self.next_status += self.every

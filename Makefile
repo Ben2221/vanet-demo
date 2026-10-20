@@ -109,9 +109,20 @@ report: $(PY)
 show: $(PY)
 	$(PY) experiments/show.py
 
-# a live side-by-side for a presentation: Phase I design vs v3-fast on ns-3 (~3 min)
-DEMO = $(PY) network/run_scenario.py --vehicles 50 --duration 60 --seed 1 --backend $(BACKEND) --protocol real \
-	--mobility-step 0.1 --attacker-ratio 0.1 --attack random_pos --attack-start 20 --rsu-cpu --v2v-verify \
+# a live side-by-side for a presentation: Phase I design vs v3-fast on ns-3 (~3 min).
+# make demo / make live settings, e.g. make live CARS=100 SIM_TIME=300 RSU_SPACING=333 PACE=1
+CARS        ?= 50          # vehicles (ignored with MAP=lust:...)
+SIM_TIME    ?= 60          # simulated seconds
+RSU_SPACING ?= 450         # m between RSUs; on the 1 km grid 1000 -> 4 RSUs, 450 -> 9, 333 -> 16, 250 -> 25
+ATTACKERS   ?= 0.1         # share of vehicles that attack
+ATTACK_TYPE ?= random_pos  # const_pos, random_pos, const_speed, random_speed, sudden_stop, flood
+ATTACK_AT   ?= 20          # s when the attack starts
+MAP         ?= grid        # grid, or real Luxembourg traffic: lust:low, lust:mid, lust:peak
+PACE        ?= 0           # make live: simulated s per wall s (1 = real time, 0 = as fast as possible)
+DEMO = $(PY) network/run_scenario.py --vehicles $(strip $(CARS)) --duration $(strip $(SIM_TIME)) --seed $(SEED) \
+	--backend $(BACKEND) --protocol real --mobility-step 0.1 --rsu-spacing $(strip $(RSU_SPACING)) \
+	--attacker-ratio $(strip $(ATTACKERS)) --attack $(strip $(ATTACK_TYPE)) --attack-start $(strip $(ATTACK_AT)) \
+	$(if $(filter grid,$(strip $(MAP))),,--real $(strip $(MAP))) --rsu-cpu --v2v-verify \
 	--privacy-log --compute-times experiments/compute_times_v3.json
 demo: $(PY)
 	$(DEMO) --out experiments/results/demo/Phase-I
@@ -123,7 +134,7 @@ demo: $(PY)
 # blockchain revocation, the attacker shut out (PROFILE=Phase-I for the original design)
 PROFILE ?= v3-fast
 live: $(PY)
-	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --out experiments/results/live/$(PROFILE)
+	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --live-pace $(strip $(PACE)) --out experiments/results/live/$(PROFILE)
 
 # replay a finished run the same way, without simulating (RUN=<run folder>, SPEED=sim s per s)
 RUN ?= experiments/results/demo/v3-fast

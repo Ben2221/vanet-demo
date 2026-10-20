@@ -146,6 +146,7 @@ SUMO (where cars drive) ──► ns-3 (802.11p radio: who hears what, when, col
 | Command | Time | What you see |
 |---|---|---|
 | `make live` | ~30 s | One ns-3 run narrated live in the terminal: cars joining, the attack, detection, quarantine, blockchain revocation, the attacker shut out, and a status line every 5 s |
+| `make live CARS=100 SIM_TIME=300 RSU_SPACING=333 PACE=1` | 5 min | Change the scenario: 100 cars, 300 simulated s, 16 RSUs, shown in real time. Also `ATTACKERS=0.2`, `ATTACK_TYPE=const_speed`, `ATTACK_AT=30`, `MAP=lust:mid` (real Luxembourg traffic) |
 | `make live PROFILE=Phase-I` | ~40 s | The same for the original design. Compare the "BSM bytes" in the status lines |
 | `make replay RUN=experiments/results/demo/v3-fast SPEED=2` | adjustable | Replays a finished run, no simulation; `SPEED=0` prints it all at once |
 | `make demo` | ~3 min | Three schemes on ns-3, then a side-by-side table |
