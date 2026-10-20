@@ -1,11 +1,12 @@
 """Cryptographic primitives for the VANET Cryptography and Authentication Protocol."""
 from __future__ import annotations
 import hashlib
+import hmac
 import secrets
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Iterable
-from coincurve import PrivateKey, PublicKey
+from coincurve import PrivateKey, PublicKey, PublicKeyXOnly
 
 # secp256k1 group order
 N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -152,7 +153,34 @@ def schnorr_sign(secret: int, message: bytes) -> dict:
     s = (r + c * secret) % N
     return {"R": R.hex(), "s": _i32(s).hex()}
 
+# Simulation speed-up: one broadcast BSM is checked by ~10 vehicles and 2-3 RSUs with the
+# same (key, message, signature). Verification is deterministic, so the result is computed once
+# and reused; every verifier is still charged the full time by the CPU model (sim_app CpuQueue).
+_VERIFIED: dict[bytes, bool] = {}
+_VERIFIED_MAX = 200_000
+
+
+def _memo(kind: bytes, public_key: bytes, message: bytes, sig: bytes, check) -> bool:
+    key = hashlib.sha256(kind + bytes(public_key) + len(message).to_bytes(4, "big") + message + sig).digest()
+    hit = _VERIFIED.get(key)
+    if hit is None:
+        hit = bool(check())
+        if len(_VERIFIED) >= _VERIFIED_MAX:
+            _VERIFIED.clear()
+        _VERIFIED[key] = hit
+    return hit
+
+
 def schnorr_verify(public_key: bytes, message: bytes, signature: dict) -> bool:
+    try:
+        r, s_ = str(signature["R"]).encode(), str(signature["s"]).encode()
+        sig = len(r).to_bytes(4, "big") + r + s_        # length prefix: no ambiguous R / s split
+    except (KeyError, TypeError):
+        return False
+    return _memo(b"S", public_key, message, sig, lambda: _schnorr_verify(public_key, message, signature))
+
+
+def _schnorr_verify(public_key: bytes, message: bytes, signature: dict) -> bool:
     try:
         R = bytes.fromhex(signature["R"])
         s = int.from_bytes(bytes.fromhex(signature["s"]), "big")
@@ -164,6 +192,63 @@ def schnorr_verify(public_key: bytes, message: bytes, signature: dict) -> bool:
         return lhs == rhs
     except Exception:
         return False
+
+_BIP340_TAG = hashlib.sha256(b"VANET-BSM-BIP340-v1").digest()
+
+def _bip340_digest(message: bytes) -> bytes:
+    """BIP340-style tagged hash: BIP340 signs exactly 32 bytes."""
+    return hashlib.sha256(_BIP340_TAG + _BIP340_TAG + message).digest()
+
+@lru_cache(maxsize=8192)
+def _parse_xonly(point: bytes) -> PublicKeyXOnly:
+    return PublicKeyXOnly(_parse(point).format(compressed=True)[1:])
+
+def bip340_sign(secret: int, message: bytes) -> str:
+    """64-byte BIP340 Schnorr signature (hex) with the same secret scalar as schnorr_sign.
+
+    The verifying key is the x-coordinate of the usual compressed public key;
+    libsecp256k1 negates the secret internally when that point has odd y, so
+    pseudonym keys and their registration stay unchanged."""
+    if not 1 <= secret < N:
+        raise ValueError("invalid secret scalar")
+    return PrivateKey(_i32(secret)).sign_schnorr(_bip340_digest(message)).hex()
+
+def bip340_verify(public_key: bytes, message: bytes, signature: str) -> bool:
+    """Check a bip340_sign signature against a 33-byte compressed public key."""
+    if not isinstance(signature, str):
+        return False
+    return _memo(b"B", public_key, message, signature.encode(), lambda: _bip340_verify(public_key, message, signature))
+
+
+def _bip340_verify(public_key: bytes, message: bytes, signature: str) -> bool:
+    try:
+        sig = bytes.fromhex(signature)
+        if len(sig) != 64:
+            return False
+        return _parse_xonly(bytes(public_key)).verify(sig, _bip340_digest(message))
+    except Exception:
+        return False
+
+BSM_TAG_BYTES = 8
+
+def bsm_mac_key(secret: int, peer_public_key: bytes, ticket_digest: str) -> bytes:
+    """Session MAC key of a pseudonym and an RSU for one ticket (--bsm-auth mac).
+
+    k = SHA-256("VANET-BSM-MAC" || ECDH(secret, peer) || digest): the vehicle uses its
+    pseudonym secret and the RSU key, the RSU its own secret and the ticket's pk, so
+    no handshake is needed beyond the ZKP authentication that produced the ticket.
+    ECDH is libsecp256k1's (SHA-256 of the compressed shared point)."""
+    if not 1 <= secret < N:
+        raise ValueError("invalid secret scalar")
+    shared = PrivateKey(_i32(secret)).ecdh(_parse(bytes(peer_public_key)).format(compressed=True))
+    return hashlib.sha256(b"VANET-BSM-MAC" + shared + bytes.fromhex(ticket_digest)).digest()
+
+def bsm_tag(key: bytes, message: bytes) -> str:
+    """First BSM_TAG_BYTES of HMAC-SHA256(key, message), hex."""
+    return hmac.new(key, message, hashlib.sha256).digest()[:BSM_TAG_BYTES].hex()
+
+def bsm_tag_ok(key: bytes, message: bytes, tag: object) -> bool:
+    return isinstance(tag, str) and hmac.compare_digest(bsm_tag(key, message), tag)
 
 def hash_leaf(data: bytes) -> bytes:
     return hashlib.sha256(b"\x00" + data).digest()

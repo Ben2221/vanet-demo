@@ -5,7 +5,7 @@ Wire format (docs/interfaces.md, section 2):
     [type: u8] [version: u8] [fields: tagged value]
 
 The first byte is the message type (1 BEACON, 2 AUTH_REQ, 3 AUTH_RESP,
-4 HANDOVER_REQ, 5 PREAUTH, 6 BSM), so the network can classify packets
+4 HANDOVER_REQ, 5 PREAUTH, 6 BSM, 7 QUARANTINE), so the network can classify packets
 without parsing them. Fields are a self-describing binary encoding of the same
 dict the protocol code works with. Lowercase hex strings (keys, signatures,
 hashes, nonces) are carried as raw bytes and common field names and values
@@ -21,6 +21,23 @@ Typical sizes in bytes (UDP payload in ns-3), 500 pseudonyms per epoch
 - HANDOVER_REQ: ~290 (ticket, target RSU, beacon nonce, timestamp, pseudonym signature)
 - PREAUTH:      ~280 (ticket, source/target RSU, timestamp, RSU signature)
 - BSM:          ~330 (seq, t, x, y, speed, heading, ticket, pseudonym signature)
+
+Opt-in BSM/beacon forms (run_scenario.py "real protocol options"):
+- --bsm-ticket digest: "ticket_digest" (8 bytes) instead of "ticket": BSM ~170, or ~330
+  when the full ticket is attached (new ticket/handover/RSU, every --ticket-every BSMs)
+- --compact-wire: kinematics as one 18-byte "k" blob (pack_kinematics), BIP340 signature
+  as one 64-byte hex field: BSM ~280 (~120 with digest); BEACON ~125 (no "public_key")
+- --bsm-auth mac: between signed anchors (digest-mode BSMs above), "tags" = {rsu_id: 8-byte
+  HMAC} for 1-3 RSUs instead of "signature": BSM ~115 + 16 per extra tag (~75 compact)
+- --fast-revocation: QUARANTINE ~150 (pid, evidence hash, reporter, timestamp, RSU
+  signature), backbone only
+- --bsm-auth tesla: between signed anchors, "ti" (interval), "tm" (8-byte TESLA MAC) and
+  "kd" (16-byte disclosed chain key) instead of "signature": BSM ~90 (~70 compact);
+  TESLA_KEY ~35 (pid, digest, interval, key) when no BSM would disclose a key in time
+- --implicit-cert: tickets are ECQV certificates ("pu" instead of "pk" + RSU signature):
+  ticket ~90 instead of ~160 bytes (full-ticket BSM, HANDOVER_REQ, PREAUTH, AUTH_RESP)
+- --credential bbs: AUTH_REQ carries "nym" (48 B) and a 304-byte "bbs_proof" instead of
+  the public key, epoch Merkle path and Schnorr proof
 """
 from __future__ import annotations
 import re
@@ -28,7 +45,8 @@ import struct
 from dataclasses import dataclass
 from typing import Any
 
-TYPE_CODES = {"BEACON": 1, "AUTH_REQ": 2, "AUTH_RESP": 3, "HANDOVER_REQ": 4, "PREAUTH": 5, "BSM": 6}
+TYPE_CODES = {"BEACON": 1, "AUTH_REQ": 2, "AUTH_RESP": 3, "HANDOVER_REQ": 4, "PREAUTH": 5, "BSM": 6,
+              "QUARANTINE": 7, "TESLA_KEY": 8}
 TYPE_NAMES = {v: k for k, v in TYPE_CODES.items()}
 SUPPORTED_TYPES = set(TYPE_CODES)
 WIRE_VERSION = 1
@@ -45,9 +63,21 @@ INTERNED = [
     "seq", "t", "x", "y", "speed", "heading", "handover", "authenticated", "handover_accepted",
     "revoked", "policy_denied", "not_registered", "invalid_proof", "stale_request",
     "invalid_or_replayed_nonce", "unknown_or_expired_epoch", "missing_shared_authorization",
+    "ticket_digest", "k", "unknown_ticket_digest",
+    "tags", "invalid_bsm_mac", "bsm_mac_not_for_rsu", "anchor_overdue", "anchor_required",
+    "evidence", "reporter", "quarantined",
+    # v3 options (--bsm-auth tesla, --implicit-cert, --cluster-size, --revocation-filter, --credential bbs)
+    "ti", "tm", "kd", "tc", "pu", "r", "cert_req", "cl", "rf", "nym", "j", "bbs_proof",
+    "tesla_late", "invalid_tesla_mac", "tesla_no_key", "ticket_wrong_cluster", "invalid_cert",
+    "cluster_ticket", "j_out_of_range", "urgent",
+    "renew", "renewed",
 ]
 _INTERN_INDEX = {s: i for i, s in enumerate(INTERNED)}
 _HEX = re.compile(r"^(?:[0-9a-f]{2})+$")
+
+_KIN = struct.Struct("!HIiiHH")
+KINEMATICS_BYTES = _KIN.size
+_U16, _U32 = 0xFFFF, 1 << 32
 
 T_NONE, T_FALSE, T_TRUE, T_INT, T_FLOAT, T_STR, T_HEX, T_LIST, T_DICT, T_INTERN = range(10)
 _F64 = struct.Struct("!d")
@@ -184,6 +214,45 @@ class _Reader:
         raise ValueError(f"unknown value tag {tag}")
 
 
+def _cm(v: Any) -> int:
+    return min(max(round(float(v) * 100), -(1 << 31)), (1 << 31) - 1)
+
+
+KINEMATIC_KEYS = frozenset({"seq", "t", "x", "y", "speed", "heading"})
+
+
+def pack_kinematics(fields: dict[str, Any]) -> str:
+    """J2735-style fixed-point BSM kinematics as one 18-byte hex blob (--compact-wire).
+
+    seq u16 (mod 65536), t u32 ms (mod 2^32), x/y i32 cm, speed u16 in 0.02 m/s
+    (clamped to 0..1310.7 m/s; x/y clamped to the i32 range), heading u16 in 0.0125 deg (mod 360). Precision is
+    1 ms, 1 cm, 0.02 m/s and 0.0125 deg. Keys other than KINEMATIC_KEYS (``timestamp`` is
+    an alias of ``t``) are dropped and missing ones packed as 0, so Vehicle.make_bsm
+    insists on exactly these keys. seq wraps after 6553 s at 10 Hz (655 s for a 100 Hz
+    flood attacker); RSU.verify_bsm unwraps it against the pseudonym's previous seq."""
+    t = fields.get("t", fields.get("timestamp", 0.0))
+    speed = min(max(round(float(fields.get("speed", 0.0)) / 0.02), 0), _U16)
+    heading = round((float(fields.get("heading", 0.0)) % 360.0) / 0.0125) % 28800
+    return _KIN.pack(int(fields.get("seq", 0)) & _U16, round(float(t) * 1000) % _U32,
+                     _cm(fields.get("x", 0.0)), _cm(fields.get("y", 0.0)),
+                     speed, heading).hex()
+
+
+def unpack_kinematics(blob: str, ref_time: float | None = None) -> dict[str, Any]:
+    """Inverse of pack_kinematics: {"seq", "t", "x", "y", "speed", "heading"}.
+    ``t`` is the time congruent to the 32-bit ms stamp closest to ``ref_time`` (the receive time)."""
+    raw = bytes.fromhex(blob)
+    if len(raw) != _KIN.size:
+        raise ValueError("bad kinematics blob")
+    seq, t_ms, x, y, speed, heading = _KIN.unpack(raw)
+    if ref_time is not None:
+        ref_ms = round(float(ref_time) * 1000)
+        diff = (t_ms - ref_ms) % _U32
+        t_ms = ref_ms + (diff - _U32 if diff >= _U32 // 2 else diff)
+    return {"seq": seq, "t": t_ms / 1000, "x": x / 100, "y": y / 100,
+            "speed": speed * 0.02, "heading": heading * 0.0125}
+
+
 def message_type(data: bytes) -> str:
     """Name of a message from its first byte (used by the network for logs and EDCA class)."""
     if not data:
@@ -209,6 +278,25 @@ class Message:
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "Message":
+        """Decode. In the simulator (enable_decode_cache) a broadcast is decoded by every
+        receiver (~100 in dense traffic), so results are cached by content: each call gets its
+        own top-level ``fields`` dict, nested values are shared and must be treated as read-only
+        (protocol code never modifies them; tests that forge messages edit them, so the cache
+        is off unless the simulator turns it on)."""
+        if _DECODE_CACHE and isinstance(data, (bytes, bytearray)):
+            key = bytes(data)
+            hit = _DECODED.get(key)
+            if hit is not None:
+                return cls(hit[0], dict(hit[1]))
+            msg = cls._decode(key)
+            if len(_DECODED) >= _DECODED_MAX:
+                _DECODED.clear()
+            _DECODED[key] = (msg.type, msg.fields)
+            return cls(msg.type, dict(msg.fields))
+        return cls._decode(data)
+
+    @classmethod
+    def _decode(cls, data: bytes) -> "Message":
         if not isinstance(data, (bytes, bytearray)) or len(data) > MAX_MESSAGE_BYTES or len(data) < 3:
             raise ValueError("invalid or oversized message")
         data = bytes(data)
@@ -223,6 +311,18 @@ class Message:
         if reader.pos != len(data):
             raise ValueError("trailing bytes after message")
         return cls(TYPE_NAMES[data[0]], fields)
+
+_DECODED: dict[bytes, tuple[str, dict]] = {}
+_DECODED_MAX = 8192
+_DECODE_CACHE = False
+
+
+def enable_decode_cache(on: bool = True) -> None:
+    """Simulator only: share decoded messages between receivers (see Message.from_bytes)."""
+    global _DECODE_CACHE
+    _DECODE_CACHE = on
+    _DECODED.clear()
+
 
 def make_message(message_type: str, **fields) -> Message:
     return Message(message_type, fields)

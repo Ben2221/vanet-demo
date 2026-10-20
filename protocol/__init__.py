@@ -63,10 +63,16 @@ def setup(env) -> None:
     run_setup(env)
 
 
+def teardown(env) -> None:
+    from .sim_app import teardown as run_teardown
+    run_teardown(env)
+
+
 __all__ = [
     "create_vehicle",
     "create_rsu",
     "setup",
+    "teardown",
     "message_type",
     "pseudonym_leaf",
     "MockLedgerView",

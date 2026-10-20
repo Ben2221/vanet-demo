@@ -121,6 +121,10 @@ class NodeHandle:
     def velocity(self) -> tuple[float, float]:
         return self._sc.backend.velocity(self.id)
 
+    def peer_position(self, node_id: int) -> tuple[float, float]:
+        """Position of another node (e.g. the sender of a received packet)."""
+        return self._sc.backend.position(node_id)
+
     def speed(self) -> float:
         return math.hypot(*self.velocity())
 
