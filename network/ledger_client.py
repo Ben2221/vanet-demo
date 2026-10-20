@@ -257,6 +257,22 @@ class RestLedgerClient:
     # ------------------------------------------------------------------- http
     def _http(self, caller: str, method: str, path: str, body: dict | None = None,
               fn: str = "") -> tuple[int, dict]:
+        """One request; a write that Fabric rejected as transient (TX_CONFLICT: an MVCC conflict when
+        RSUs write the same key in one block, or endorsing peers a block apart) is retried, and the
+        time spent retrying stays in the measured commit time."""
+        t0 = time.perf_counter()
+        for attempt in range(20):
+            status, out = self._http_once(caller, method, path, body, fn)
+            if method == "GET" or status != 409 or "TX_CONFLICT" not in out.get("_error", ""):
+                break
+            time.sleep(0.05 + 0.1 * random.random() * (attempt + 1))
+        if attempt and status == 200:
+            out["commitMs"] = (time.perf_counter() - t0) * 1000
+            out["retries"] = attempt
+        return status, out
+
+    def _http_once(self, caller: str, method: str, path: str, body: dict | None = None,
+                   fn: str = "") -> tuple[int, dict]:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method,
                                      headers={"Content-Type": "application/json",
@@ -337,17 +353,7 @@ class RestLedgerClient:
             out.update(reqId=a["req_id"], pid=a["pid"])
             return out
         if fn == "approve_trace":
-            # RSUs approve the same trace at about the same time: Fabric validates one write per key
-            # and block and rejects the rest (MVCC conflict, TX_CONFLICT). Retry those; the time spent
-            # stays in the measured commit time.
-            t0 = time.perf_counter()
-            for attempt in range(20):
-                status, out = self._http(caller, "POST", f"/traces/{self.req(a['req_id'])}/approve", None, fn)
-                if status != 409 or "TX_CONFLICT" not in out.get("_error", ""):
-                    break
-                time.sleep(0.05 + 0.1 * random.random() * (attempt + 1))
-            if status == 200:
-                out["commitMs"] = (time.perf_counter() - t0) * 1000
+            status, out = self._http(caller, "POST", f"/traces/{self.req(a['req_id'])}/approve", None, fn)
             if status == 409:      # this RSU already approved, or the trace is no longer pending
                 tr = self.call(caller, "get_trace", req_id=a["req_id"]).get("trace") or {}
                 return {"txId": "", "commitMs": 0.0, "approvals": len(tr.get("approvals", [])),

@@ -80,6 +80,14 @@ function toHttpError(error) {
     return new HttpError(503, 'PEER_UNAVAILABLE', 'Fabric peer or orderer is unavailable');
   }
 
+  // the two endorsing peers were a block apart and simulated against different state: transient
+  // under load, like an MVCC conflict, so it is reported as the retryable TX_CONFLICT
+  if (JSON.stringify((error && error.details) || []).includes('ProposalResponsePayloads do not match')) {
+    return new HttpError(409, 'TX_CONFLICT', 'Endorsements differ (peer state lag); retry');
+  }
+  // unmapped: log the cause, the client only sees INTERNAL_ERROR
+  console.error('INTERNAL_ERROR:', error && (error.stack || error.message || error),
+    error && error.details ? JSON.stringify(error.details) : '');
   return new HttpError(500, 'INTERNAL_ERROR', 'Internal server error');
 }
 
