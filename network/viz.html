@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VANET Live Map</title>
+<style>
+:root {
+  --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b95a3;
+  --road: #2f3640; --honest: #5aa9ff; --attacker: #ff8a3d; --ev: #ff4d5e; --revoked: #6b7280;
+  --rsu: #3ddc97; --range: rgba(61, 220, 151, 0.07); --range-edge: rgba(61, 220, 151, 0.35);
+  --sel: #ffd84d; --unauth: #b9c2cf;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+#app { display: grid; grid-template-columns: 1fr 340px; grid-template-rows: auto 1fr 210px; height: 100vh; }
+header { grid-column: 1 / 3; display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 14px; margin: 0 6px 0 0; font-weight: 600; }
+.stat { color: var(--muted); white-space: nowrap; }
+.stat b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ctrl { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, select { background: #222831; color: var(--text); border: 1px solid #343c47; border-radius: 6px;
+  padding: 4px 10px; font: inherit; cursor: pointer; }
+button:hover, select:hover { border-color: #4b5563; }
+label.tog { color: var(--muted); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+#mapwrap { position: relative; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+canvas.drag { cursor: grabbing; }
+#legend { position: absolute; left: 12px; bottom: 12px; background: rgba(23,27,33,.9); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; color: var(--muted); font-size: 12px; }
+#legend div { display: flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+#done { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: var(--panel);
+  border: 1px solid var(--line); padding: 6px 12px; border-radius: 8px; display: none; }
+aside { grid-row: 2 / 4; grid-column: 2; border-left: 1px solid var(--line); background: var(--panel);
+  overflow-y: auto; padding: 12px 14px; }
+aside h2 { font-size: 15px; margin: 0 0 2px; }
+aside .sub { color: var(--muted); margin-bottom: 10px; }
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 3px 8px; margin-bottom: 12px; }
+.kv div:nth-child(odd) { color: var(--muted); }
+.kv div:nth-child(even) { word-break: break-all; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 12px; margin-right: 4px; }
+.ok { background: rgba(61,220,151,.15); color: #6ff0b4; } .bad { background: rgba(255,77,94,.15); color: #ff8a95; }
+.warn { background: rgba(255,138,61,.15); color: #ffb07a; } .info { background: rgba(90,169,255,.15); color: #9ccaff; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 6px; }
+table.ev { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.ev td { padding: 2px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+table.ev td:first-child { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#feed { grid-column: 1; grid-row: 3; border-top: 1px solid var(--line); overflow-y: auto; padding: 6px 14px;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+#feed .l { cursor: pointer; } #feed .l:hover { background: #1c2128; }
+#feed .t { color: var(--muted); } #feed .n { color: #9ccaff; display: inline-block; min-width: 72px; }
+#feed .why { color: var(--muted); padding-left: 2em; }
+.hint { color: var(--muted); }
+@media (max-width: 800px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 55vh 30vh auto; }
+  aside { grid-row: 4; grid-column: 1; border-left: 0; border-top: 1px solid var(--line); }
+  #feed { grid-row: 3; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="title">VANET live map</h1>
+    <span class="stat">t <b id="s-t">0.0</b> s</span>
+    <span class="stat">on road <b id="s-road">0</b></span>
+    <span class="stat">authenticated <b id="s-auth">0</b></span>
+    <span class="stat">handovers <b id="s-ho">0</b></span>
+    <span class="stat">attackers caught <b id="s-caught">0</b></span>
+    <span class="stat">honest revoked <b id="s-hrev">0</b></span>
+    <span class="stat" id="s-ev-wrap" hidden>emergency <b id="s-ev">0</b></span>
+    <span class="stat">BSM data <b id="s-bytes">0</b></span>
+    <div class="ctrl">
+      <button id="pause">Pause</button>
+      <select id="speed" title="simulation speed">
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+        <option value="5">5×</option><option value="10">10×</option><option value="50">max</option>
+      </select>
+      <label class="tog"><input type="checkbox" id="t-range" checked> ranges</label>
+      <label class="tog"><input type="checkbox" id="t-att" checked> show attackers</label>
+      <label class="tog"><input type="checkbox" id="t-lab"> labels</label>
+      <button id="fit" title="fit the map">Fit</button>
+    </div>
+  </header>
+  <div id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="done">Simulation finished: the final state stays on screen.</div>
+    <div id="legend">
+      <div><span class="sw" style="background:var(--honest)"></span> vehicle with a valid ticket</div>
+      <div><span class="sw" style="background:var(--unauth)"></span> vehicle without a ticket</div>
+      <div><span class="sw" style="background:var(--ev)"></span> emergency vehicle</div>
+      <div><span class="sw" style="background:var(--attacker)"></span> attacker (ground truth)</div>
+      <div><span class="sw" style="background:var(--revoked)"></span> revoked / shut out</div>
+      <div><span class="sw" style="background:var(--rsu);border-radius:2px"></span> RSU and its range</div>
+    </div>
+  </div>
+  <aside id="side">
+    <h2>Click a vehicle or an RSU</h2>
+    <div class="sub">Drag to pan, scroll to zoom. Lines in the feed below select their vehicle or RSU.</div>
+    <p class="hint">Each vehicle proves anonymously that it is registered (zero-knowledge proof) and gets a
+    short-lived ticket from an RSU. Its safety messages (BSMs) are signed under that ticket. RSUs check them,
+    report misbehaviour to the blockchain, and two reports revoke a pseudonym.</p>
+    <h3>Project</h3>
+    <p class="hint">Privacy-Preserving Authentication and Authorization for VANETs Using Blockchain and
+    Zero-Knowledge Proofs · IIIT Kottayam<br>Ben Savio · Harsh Kumar Gour · Byreddy Varshith Reddy ·
+    Andela Harsha Vardhan<br>Guide: Dr. Deepak Jose</p>
+  </aside>
+  <div id="feed"></div>
+</div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const cv = $("map"), ctx = cv.getContext("2d");
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const C = {};
+for (const k of ["road", "honest", "attacker", "ev", "revoked", "rsu", "range", "range-edge", "sel", "unauth", "text", "muted"])
+  C[k] = css("--" + k);
+
+let net = null, prev = null, cur = null, curAt = 0, sel = null, feedSince = 0, nodeInfo = null;
+const lastHeading = {};
+const view = { s: 1, ox: 0, oy: 0 };
+
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect(), d = devicePixelRatio || 1;
+  cv.width = r.width * d; cv.height = r.height * d;
+  cv.style.width = r.width + "px"; cv.style.height = r.height + "px";
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+}
+function fit() {
+  if (!net) return;
+  const [x0, y0, x1, y1] = net.bounds, r = cv.parentElement.getBoundingClientRect();
+  view.s = Math.min(r.width / (x1 - x0), r.height / (y1 - y0)) * 0.95;
+  view.ox = r.width / 2 - ((x0 + x1) / 2) * view.s;
+  view.oy = r.height / 2 + ((y0 + y1) / 2) * view.s;
+}
+const sx = (x) => x * view.s + view.ox;
+const sy = (y) => -y * view.s + view.oy;
+const wx = (px) => (px - view.ox) / view.s;
+const wy = (py) => -(py - view.oy) / view.s;
+
+function lerpVehicles() {
+  if (!cur) return [];
+  const a = Math.min(1, (performance.now() - curAt) / 100);
+  const pm = {};
+  if (prev) for (const v of prev.vehicles) pm[v.name] = v;
+  return cur.vehicles.map((v) => {
+    const p = pm[v.name];
+    if (!p || Math.hypot(p.x - v.x, p.y - v.y) > 50) return { ...v };
+    return { ...v, x: p.x + (v.x - p.x) * a, y: p.y + (v.y - p.y) * a };
+  });
+}
+function color(v) {
+  if (v.revoked || v.out) return C.revoked;
+  if (v.ev) return C.ev;
+  if (v.att && $("t-att").checked) return C.attacker;
+  return v.ticket ? C.honest : C.unauth;
+}
+
+function draw() {
+  const r = cv.parentElement.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  if (!net) { requestAnimationFrame(draw); return; }
+  ctx.strokeStyle = C.road; ctx.lineWidth = Math.max(1, 3.2 * view.s); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath();
+  for (const rd of net.roads) {
+    ctx.moveTo(sx(rd[0][0]), sy(rd[0][1]));
+    for (let i = 1; i < rd.length; i++) ctx.lineTo(sx(rd[i][0]), sy(rd[i][1]));
+  }
+  ctx.stroke();
+  const rstate = {};
+  if (cur) for (const s of cur.rsus) rstate[s.name] = s;
+  for (const s of net.rsus) {
+    if ($("t-range").checked) {
+      ctx.beginPath(); ctx.arc(sx(s.x), sy(s.y), s.range * view.s, 0, 2 * Math.PI);
+      ctx.fillStyle = C.range; ctx.fill(); ctx.strokeStyle = C["range-edge"]; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+  const vs = lerpVehicles();
+  const t = performance.now() / 1000;
+  for (const v of vs) {
+    if (v.v > 0.3) lastHeading[v.name] = v.h;
+    const h = ((lastHeading[v.name] ?? v.h) * Math.PI) / 180;
+    const x = sx(v.x), y = sy(v.y), k = Math.max(4, Math.min(9, 5 * view.s * 1.2));
+    ctx.save(); ctx.translate(x, y); ctx.rotate(h);
+    ctx.beginPath(); ctx.moveTo(0, -k * 1.3); ctx.lineTo(k * 0.8, k); ctx.lineTo(-k * 0.8, k); ctx.closePath();
+    ctx.fillStyle = color(v); ctx.fill();
+    if (v.ev && !v.revoked && Math.floor(t * 3) % 2 === 0) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke(); }
+    ctx.restore();
+    if (v.revoked || v.out) {
+      ctx.strokeStyle = "#ff4d5e"; ctx.lineWidth = 1.5; ctx.beginPath();
+      ctx.moveTo(x - k, y - k); ctx.lineTo(x + k, y + k); ctx.moveTo(x + k, y - k); ctx.lineTo(x - k, y + k); ctx.stroke();
+    }
+    if (sel && sel.kind === "veh" && sel.name === v.name) ring(x, y, k + 6);
+    if ($("t-lab").checked) label(v.name, x + k + 3, y - k);
+  }
+  for (const s of net.rsus) {
+    const x = sx(s.x), y = sy(s.y), st = rstate[s.name] || {};
+    const load = Math.min(1, (st.queue_ms || 0) / 50);
+    ctx.fillStyle = load > 0.05 ? `rgb(${61 + 194 * load},${220 - 120 * load},${151 - 100 * load})` : C.rsu;
+    ctx.fillRect(x - 6, y - 6, 12, 12);
+    ctx.strokeStyle = "#0f1216"; ctx.lineWidth = 2; ctx.strokeRect(x - 6, y - 6, 12, 12);
+    if (sel && sel.kind === "rsu" && sel.name === s.name) ring(x, y, 13);
+    label(s.name, x + 9, y + 4, true);
+  }
+  requestAnimationFrame(draw);
+}
+function ring(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.strokeStyle = C.sel; ctx.lineWidth = 2; ctx.stroke(); }
+function label(s, x, y, strong) {
+  ctx.font = (strong ? "600 " : "") + "11px system-ui, sans-serif";
+  ctx.fillStyle = strong ? C.text : C.muted; ctx.fillText(s, x, y);
+}
+
+// ---------------------------------------------------------------- interaction
+let drag = null;
+cv.addEventListener("mousedown", (e) => { drag = { x: e.offsetX, y: e.offsetY, ox: view.ox, oy: view.oy, moved: false }; cv.classList.add("drag"); });
+addEventListener("mouseup", (e) => {
+  cv.classList.remove("drag");
+  if (drag && !drag.moved && e.target === cv) pick(e.offsetX, e.offsetY);
+  drag = null;
+});
+cv.addEventListener("mousemove", (e) => {
+  if (!drag) return;
+  const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+  view.ox = drag.ox + dx; view.oy = drag.oy + dy;
+});
+cv.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015), mx = wx(e.offsetX), my = wy(e.offsetY);
+  view.s *= f; view.ox = e.offsetX - mx * view.s; view.oy = e.offsetY + my * view.s;
+}, { passive: false });
+
+function pick(px, py) {
+  let best = null, bd = 14;
+  for (const s of net.rsus) { const d = Math.hypot(sx(s.x) - px, sy(s.y) - py); if (d < bd) { bd = d; best = { kind: "rsu", name: s.name }; } }
+  for (const v of lerpVehicles()) { const d = Math.hypot(sx(v.x) - px, sy(v.y) - py); if (d < bd) { bd = d; best = { kind: "veh", name: v.name }; } }
+  select(best);
+}
+function select(s) { sel = s; nodeInfo = null; if (s) loadNode(); renderSide(); }
+
+// ---------------------------------------------------------------- side panel
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tag = (cls, s) => `<span class="tag ${cls}">${esc(s)}</span>`;
+const kv = (rows) => `<div class="kv">${rows.filter(Boolean).map(([k, v]) => `<div>${esc(k)}</div><div>${v}</div>`).join("")}</div>`;
+const LABEL = {
+  AUTH_OK: "got a ticket (zero-knowledge login)", HANDOVER_OK: "handover with its ticket", RENEW_OK: "ticket renewed",
+  PSEUDONYM_CHANGE: "changed pseudonym", AUTH_REJECTED: "login rejected", ATTACK_START: "attack starts (ground truth)",
+  ENTER: "entered the map", LEAVE: "left the map", PID_ASSIGN: "pseudonym in use", CLUSTER_SWITCH: "entered RSU cluster",
+  HANDOVER_FALLBACK: "handover failed: full login", ALL_PSEUDONYMS_REVOKED: "every pseudonym revoked: shut out",
+  EMERGENCY_ROLE: "emergency vehicle on duty", FAKE_EMERGENCY_LOGIN: "asked for the emergency service",
+  AUTH_VERIFY: "verified a login proof", AUTH_REJECT: "rejected a login", HANDOVER_CHECK: "checked a handover",
+  DETECT_FLAG: "detector flagged a pseudonym", REPORT: "reported to the blockchain", BSM_REJECT: "rejected a BSM",
+  QUARANTINE_SENT: "told neighbours to quarantine", QUARANTINE_BLOCK: "quarantined a pseudonym",
+  FAKE_EMERGENCY: "caught a fake siren", IDENTITY_REVEALED: "threshold identity reveal", TRUST_UPDATE: "trust weight update",
+  AUTH_TIMEOUT: "login timed out", TICKET_REJECT: "ticket rejected", RENEW_FALLBACK: "renewal failed: full login",
+};
+function renderSide() {
+  const el = $("side");
+  if (!sel || !cur) return;
+  if (sel.kind === "veh") {
+    const v = cur.vehicles.find((x) => x.name === sel.name);
+    if (!v) { el.innerHTML = `<h2>${esc(sel.name)}</h2><div class="sub">Not on the map at the moment.</div>` + events(); return; }
+    const state = v.out ? tag("bad", "shut out") : v.revoked ? tag("bad", "pseudonym revoked") : v.ticket ? tag("ok", "valid ticket") : tag("warn", "no ticket yet");
+    el.innerHTML = `<h2>${esc(v.name)}</h2><div class="sub">${v.ev ? tag("bad", "emergency vehicle") : tag("info", v.cls || "vehicle")}
+      ${v.att ? tag("warn", "attacker (ground truth)") : ""} ${state}</div>` + kv([
+      ["Speed", `${(v.v * 3.6).toFixed(0)} km/h`],
+      ["Position", `${v.x.toFixed(0)}, ${v.y.toFixed(0)} m`],
+      v.pid && ["Pseudonym", `<code>${esc(v.pid.slice(0, 16))}</code>`],
+      v.pid && ["Pseudonyms used", `${v.pids} of ${v.npids}`],
+      ["Class (registered)", esc(v.cls)],
+      v.svc && ["Ticket service", esc(v.svc)],
+      ["Ticket from", esc(v.rsu || "–")],
+      v.exp != null && ["Ticket expires in", v.exp > 0 ? `${v.exp.toFixed(1)} s` : "expired"],
+      ["Revoked on ledger", v.revoked ? tag("bad", "yes") : tag("ok", "no")],
+    ]) + counts({ AUTH_OK: "Logins", HANDOVER_OK: "Handovers", RENEW_OK: "Renewals", PSEUDONYM_CHANGE: "Pseudonym changes", AUTH_REJECTED: "Rejected logins" }) + events();
+  } else {
+    const s = cur.rsus.find((x) => x.name === sel.name) || {}, n = net.rsus.find((x) => x.name === sel.name);
+    const inRange = cur.vehicles.filter((v) => Math.hypot(v.x - n.x, v.y - n.y) <= n.range).length;
+    el.innerHTML = `<h2>${esc(sel.name)}</h2><div class="sub">${tag("ok", "roadside unit")}</div>` + kv([
+      ["Position", `${n.x.toFixed(0)}, ${n.y.toFixed(0)} m`],
+      ["Range", `${n.range.toFixed(0)} m`],
+      ["Vehicles in range", inRange],
+      ["Channel busy", `${((s.cbr || 0) * 100).toFixed(1)} %`],
+      s.queue_ms != null && ["CPU queue", `${s.queue_ms.toFixed(1)} ms`],
+      s.busy != null && ["CPU busy (avg)", `${(s.busy * 100).toFixed(1)} %`],
+      s.reported != null && ["Pseudonyms reported", s.reported],
+      s.quarantined != null && ["Quarantined now", s.quarantined],
+    ]) + counts({ AUTH_VERIFY: "Logins verified", AUTH_REJECT: "Logins rejected", HANDOVER_CHECK: "Handovers checked",
+      DETECT_FLAG: "Detector flags", REPORT: "Reports to ledger", BSM_REJECT: "BSMs rejected", FAKE_EMERGENCY: "Fake sirens caught" }) + events();
+  }
+}
+function counts(map) {
+  if (!nodeInfo) return "";
+  const rows = Object.entries(map).map(([k, l]) => [l, nodeInfo.counts[k] || 0]);
+  return "<h3>Counts</h3>" + kv(rows);
+}
+function events() {
+  if (!nodeInfo || !nodeInfo.events.length) return "";
+  return "<h3>Recent events</h3><table class='ev'>" + nodeInfo.events.slice().reverse().map(([t, e, r, l]) =>
+    `<tr><td>${t.toFixed(2)} s</td><td>${esc(LABEL[e] || e)}${r ? ` <span class="hint">${esc(r)}</span>` : ""}${l ? ` <span class="hint">(${esc(l)})</span>` : ""}</td></tr>`).join("") + "</table>";
+}
+async function loadNode() {
+  if (!sel) return;
+  try { nodeInfo = await (await fetch("/node?name=" + encodeURIComponent(sel.name))).json(); } catch (e) { /* server gone */ }
+  renderSide();
+}
+
+// ---------------------------------------------------------------- polling
+const fmtBytes = (b) => b > 1e6 ? (b / 1e6).toFixed(2) + " MB" : (b / 1e3).toFixed(0) + " kB";
+async function pollState() {
+  try {
+    const s = await (await fetch("/state")).json();
+    if (s.t !== undefined) {
+      prev = cur; cur = s; curAt = performance.now();
+      const T = s.totals || {};
+      $("s-t").textContent = s.t.toFixed(1);
+      $("s-road").textContent = T.on_road ?? 0; $("s-auth").textContent = T.authenticated ?? 0;
+      $("s-ho").textContent = T.handovers ?? 0;
+      $("s-caught").textContent = T.attackers ? `${T.caught}/${T.attackers}` : "–";
+      $("s-hrev").textContent = T.honest_revoked ?? 0;
+      $("s-ev-wrap").hidden = !T.emergency; $("s-ev").textContent = T.emergency ?? 0;
+      $("s-bytes").textContent = fmtBytes(T.bsm_bytes || 0);
+      $("pause").textContent = s.paused ? "Resume" : "Pause";
+      $("done").style.display = s.done ? "block" : "none";
+      if (sel) renderSide();
+    }
+  } catch (e) { /* simulator stopped */ }
+  setTimeout(pollState, 100);
+}
+async function pollFeed() {
+  try {
+    const items = await (await fetch("/feed?since=" + feedSince)).json();
+    if (items.length) {
+      const f = $("feed"), stick = f.scrollTop + f.clientHeight >= f.scrollHeight - 20;
+      for (const it of items) {
+        feedSince = it.seq;
+        const d = document.createElement("div"); d.className = "l";
+        d.innerHTML = `<span class="t">[${it.t.toFixed(2)}s]</span> <span class="n">${esc(it.node)}</span> ${esc(it.text)}` +
+          (it.why ? `<div class="why">└ ${esc(it.why)}</div>` : "");
+        d.onclick = () => {
+          const name = it.node;
+          if (net.rsus.some((r) => r.name === name)) select({ kind: "rsu", name });
+          else if (name !== "ledger") select({ kind: "veh", name });
+        };
+        f.appendChild(d);
+      }
+      while (f.children.length > 1500) f.removeChild(f.firstChild);
+      if (stick) f.scrollTop = f.scrollHeight;
+    }
+  } catch (e) { /* simulator stopped */ }
+  setTimeout(pollFeed, 400);
+}
+setInterval(() => { if (sel) loadNode(); }, 1000);
+
+$("pause").onclick = () => fetch("/control?pause=" + (cur && cur.paused ? "0" : "1"));
+$("speed").onchange = (e) => fetch("/control?speed=" + e.target.value);
+$("fit").onclick = fit;
+addEventListener("resize", () => { resize(); });
+
+(async () => {
+  resize();
+  net = await (await fetch("/net")).json();
+  if (net.title) { $("title").textContent = net.title; document.title = "VANET Live Map"; }
+  fit();
+  requestAnimationFrame(draw);
+  pollState(); pollFeed();
+  // a link like http://127.0.0.1:8765/#rsu4 or #veh12 opens with that RSU or vehicle selected
+  const pre = decodeURIComponent(location.hash.slice(1));
+  if (pre) select({ kind: net.rsus.some((r) => r.name === pre) ? "rsu" : "veh", name: pre });
+})();
+</script>
+</body>
+</html>

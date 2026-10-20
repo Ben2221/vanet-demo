@@ -30,7 +30,8 @@ EXPLAIN = {
                "proof); the roadside unit (RSU) gave it a short-lived ticket to sign its messages with",
     "HANDOVER_OK": "the car drove into the next RSU's range and showed its ticket instead of proving again",
     "RENEW_OK": "the ticket was about to expire, so the car swapped it for a fresh one",
-    "ATTACK_START": "from now on this car broadcasts false positions (ground truth, the RSUs do not know it)",
+    "ATTACK_START": "from now on this car lies in its broadcasts, in the way named in brackets "
+                    "(ground truth for the narration: the RSUs do not know it)",
     "DETECT_FLAG": "the RSU's misbehaviour detector saw a physically impossible position or speed",
     "FALSE_FLAG": "one RSU's detector misjudged an honest car; one flag alone does nothing: revocation needs "
                   "reports from 2 RSUs, so this costs the car nothing",
@@ -45,9 +46,16 @@ EXPLAIN = {
     "ALL_PSEUDONYMS_REVOKED": "the attacker has no usable pseudonym left: it is shut out of the network",
     "PSEUDONYM_CHANGE": "the car switched to a new random ID so an eavesdropper cannot follow it",
     "TRUST_UPDATE": "RSUs whose reports were confirmed gain weight in future revocation votes",
+    "EMERGENCY_ROLE": "registered by the authority as class 'emergency': only this class may use the "
+                      "emergency service, and only its BSMs may carry the siren flag",
+    "EMERGENCY_JOIN": "an emergency login: with --emergency-priority the RSU verifies it ahead of its queue",
+    "FAKE_EMERGENCY_LOGIN": "a car asks for the emergency service; its class (bound at registration) says car",
+    "POLICY_DENIED": "the proof was valid, but the service's policy on the ledger does not allow this class",
+    "FAKE_EMERGENCY": "a BSM with the siren flag, signed under a car's ticket: the message itself proves the "
+                      "lie, so one RSU reports it at once and vehicles ignore the flag",
 }
 
-SHOW = {"AUTH_OK", "ATTACK_START", "DETECT_FLAG", "QUARANTINE_SENT", "REVOKED_VISIBLE", "IDENTITY_REVEALED",
+SHOW = {"AUTH_OK", "ATTACK_START", "EMERGENCY_ROLE", "FAKE_EMERGENCY_LOGIN", "FAKE_EMERGENCY", "DETECT_FLAG", "QUARANTINE_SENT", "REVOKED_VISIBLE", "IDENTITY_REVEALED",
         "AUTH_REJECTED", "ALL_PSEUDONYMS_REVOKED", "LEAVE"}
 SHOW_ALL = SHOW | {"HANDOVER_OK", "HANDOVER_FALLBACK", "RENEW_OK", "REPORT", "PSEUDONYM_CHANGE", "TRUST_UPDATE",
                    "BSM_REJECT", "LEDGER_VISIBLE", "CLUSTER_SWITCH"}
@@ -64,6 +72,7 @@ class Narrator:
         self.explained: set[str] = set()
         self.owner: dict[str, str] = {}           # pseudonym -> vehicle
         self.attackers: set[str] = set()
+        self.emergency: set[str] = set()
         self.on_road: set[str] = set()
         self.joined: set[str] = set()
         self.flagged: set[str] = set()            # pseudonyms flagged
@@ -107,6 +116,8 @@ class Narrator:
         cbr = sum(self.cbr.values()) / len(self.cbr) if self.cbr else 0.0
         caught = f"{len(self.caught)}/{len(self.attackers)}" if self.attackers else "0 (no attack yet)"
         extra = "".join(f" | {k} {v:,}" for k, v in (self.counters() if self.counters else {}).items())
+        if self.emergency:
+            extra = f" | emergency vehicles {len(self.emergency)}" + extra
         self._p(CYAN(f"── t={t:5.1f}s | cars on road {len(self.on_road)} | authenticated {len(self.joined)} | "
                      f"handovers {self.n['handovers']} | renewals {self.n['renewals']} | channel busy "
                      f"{cbr:.1%} | attackers caught {caught} | false flags {len(self.false_flags)} | "
@@ -143,6 +154,8 @@ class Narrator:
             self.n["rejected BSMs"] += 1
         elif event == "ATTACK_START":
             self.attackers.add(node)
+        elif event == "EMERGENCY_ROLE":
+            self.emergency.add(node)
 
         if event not in self.show:
             return
@@ -151,7 +164,11 @@ class Narrator:
             self.joined.add(node)
             if not first and self.show is SHOW:
                 return
-            self._say(t, node, f"{GREEN('✓ joined')} via {result}: anonymous ticket issued{lat}", event)
+            if node in self.emergency:
+                self._say(t, node, f"{GREEN('✓ joined')} via {result}: {BOLD('emergency')} ticket issued{lat}",
+                          "EMERGENCY_JOIN")
+            else:
+                self._say(t, node, f"{GREEN('✓ joined')} via {result}: anonymous ticket issued{lat}", event)
         elif event == "LEAVE":
             self._say(t, node, DIM("left the map"), event)
         elif event == "ATTACK_START":
@@ -186,7 +203,14 @@ class Narrator:
         elif event == "IDENTITY_REVEALED":
             self._say(t, node, f"identity revealed: {result}", event)
         elif event == "AUTH_REJECTED":
-            self._say(t, node, RED(f"✗ rejected by {result.replace(':', ' (')})"), event)
+            self._say(t, node, RED(f"✗ rejected by {result.replace(':', ' (')})"),
+                      "POLICY_DENIED" if result.endswith(":policy_denied") else event)
+        elif event == "EMERGENCY_ROLE":
+            self._say(t, node, BOLD("🚑 emergency vehicle on duty, siren on"), event)
+        elif event == "FAKE_EMERGENCY_LOGIN":
+            self._say(t, node, RED(f"⚠ asks {result} for the emergency service"), event)
+        elif event == "FAKE_EMERGENCY":
+            self._say(t, node, YELLOW(f"🚨 fake siren from {self._who(result)}: rejected and reported"), event)
         elif event == "ALL_PSEUDONYMS_REVOKED":
             self._say(t, node, BOLD(RED("■ shut out: every pseudonym revoked")), event)
         elif event == "HANDOVER_OK":

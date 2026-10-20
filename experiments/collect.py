@@ -96,13 +96,14 @@ def collect_run(run_dir: str | Path) -> dict:
     out.update(_traffic(summary, by_event))
     out.update(_protocol_stats(d))
     out.update(_tracking(d))
+    out.update(_emergency(d, by_event))
     if out.get("mix_silent_s") is not None and out.get("vehicle_seconds"):
         out["silent_share"] = out["mix_silent_s"] / out["vehicle_seconds"]      # mix-zone safety cost
     return out
 
 
 # ------------------------------------------------------------ v3 numbers
-LEGIT_REJECTS = {"revoked", "quarantined", "expired_or_revoked", "revoked_filter", "expired"}
+LEGIT_REJECTS = {"revoked", "quarantined", "expired_or_revoked", "revoked_filter", "expired", "fake_emergency"}
 
 
 def _vehicle_seconds(by_event: dict[str, list[dict]], duration: float) -> float:
@@ -180,6 +181,44 @@ def _protocol_stats(d: Path) -> dict:
     fb = st.get("filter_bytes", {})
     out["filter_bytes_mean"] = fb.get("mean")
     return out
+
+
+def _emergency(d: Path, by_event: dict[str, list[dict]]) -> dict:
+    """--emergency-ratio / --attack fake_emergency: tickets of emergency vehicles against the rest,
+    alert delivery, and what fake alerts and fake emergency logins achieved."""
+    f = d / "protocol_stats.json"
+    try:
+        ev = json.loads(f.read_text()).get("emergency") if f.exists() else None
+    except json.JSONDecodeError:
+        ev = None
+    if not ev:
+        return {}
+    evs = {r["node"] for r in by_event.get("EMERGENCY_ROLE", [])}
+    split: dict[bool, list[float]] = {True: [], False: []}
+    for name in ("AUTH_OK", "RENEW_OK"):
+        for r in by_event.get(name, []):
+            v = _num(r["latency_ms"])
+            if v is not None:
+                split[r["node"] in evs].append(v)
+    lat = ev.get("alert_latency_ms") or {}
+    denied = [r for r in by_event.get("AUTH_REJECTED", []) if r["result"].endswith(":policy_denied")]
+    return {
+        "ev_vehicles": len(evs),
+        "ev_ticket_ms_mean": sum(split[True]) / len(split[True]) if split[True] else None,
+        "ev_ticket_ms_p95": _pct(split[True], 0.95),
+        "other_ticket_ms_mean": sum(split[False]) / len(split[False]) if split[False] else None,
+        "other_ticket_ms_p95": _pct(split[False], 0.95),
+        "ev_warned_ratio": ev.get("warned_ratio"),
+        "ev_alert_ms_mean": lat.get("mean"), "ev_alert_ms_p95": lat.get("p95"),
+        "fake_alerts_sent": ev.get("fake_alerts_sent"),
+        "fake_alerts_accepted": ev.get("fake_alerts_accepted"),
+        "fake_alerts_rejected": (ev.get("fake_rejected_v2v") or 0) + (ev.get("fake_rejected_rsu") or 0),
+        "fake_logins": len(by_event.get("FAKE_EMERGENCY_LOGIN", [])),
+        "fake_logins_denied": len(denied),
+        "ev_priority_logins": ev.get("priority_logins"),
+        "ev_priority_capped": ev.get("priority_capped"),
+        "ev_priority_false_claims": ev.get("priority_false_claims"),
+    }
 
 
 def _tracking(d: Path) -> dict:

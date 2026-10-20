@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay viz emergency evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -36,7 +36,9 @@ help:
 	@echo "make ledger-bench   real Fabric: commit latency of Raft vs BFT ordering (Docker, Fabric 3.1.5)"
 	@echo "make show           key numbers of every run under experiments/results/"
 	@echo "make demo           live side-by-side: Phase I vs v3-fast vs v3-private on ns-3 (~3 min)"
+	@echo "make emergency      emergency vehicles: login priority, alerts, fake-ambulance attack (LuST)"
 	@echo "make live           narrate one ns-3 run in plain English as it runs (PROFILE=..., ALL=1 for every handover)"
+	@echo "make viz            the same as a live map in the browser, click vehicles and RSUs (MAP=lust:low ...)"
 	@echo "make replay         replay a finished run the same way (RUN=<run folder> SPEED=4)"
 	@echo "make mock           in-memory ledger REST server on PORT=$(PORT)"
 	@echo "make gateway        Fabric REST gateway on PORT=$(PORT) (needs make fabric-up)"
@@ -91,6 +93,11 @@ compare-lust: $(PY)
 	$(PY) experiments/run.py --config experiments/configs/compare_lust.json --jobs $(JOBS)
 	$(PY) experiments/report.py experiments/results/compare_lust
 
+# emergency vehicles on LuST mid-day and rush hour: login priority, alerts, fake-ambulance attack
+emergency: $(PY)
+	$(PY) experiments/run.py --config experiments/configs/emergency.json --jobs $(JOBS)
+	$(PY) experiments/report.py experiments/results/emergency
+
 detector-benchmark: $(PY)
 	$(PY) -m detection.benchmark
 
@@ -118,12 +125,16 @@ ATTACKERS   ?= 0.1         # share of vehicles that attack
 ATTACK_TYPE ?= random_pos  # const_pos, random_pos, const_speed, random_speed, sudden_stop, flood
 ATTACK_AT   ?= 20          # s when the attack starts
 MAP         ?= grid        # grid, or real Luxembourg traffic: lust:low, lust:mid, lust:peak
+EMERGENCY   ?= 0           # share of honest vehicles that are emergency vehicles (e.g. 0.05)
+EV_PRIORITY ?=             # EV_PRIORITY=1: RSUs verify emergency logins ahead of their queue
 PACE        ?= 0           # make live: simulated s per wall s (1 = real time, 0 = as fast as possible)
 ALL         ?=             # make live ALL=1: also every handover, renewal, pseudonym change, ledger write
 DEMO = $(PY) network/run_scenario.py --vehicles $(strip $(CARS)) --duration $(strip $(SIM_TIME)) --seed $(SEED) \
 	--backend $(BACKEND) --protocol real --mobility-step 0.1 --rsu-spacing $(strip $(RSU_SPACING)) \
 	--attacker-ratio $(strip $(ATTACKERS)) --attack $(strip $(ATTACK_TYPE)) --attack-start $(strip $(ATTACK_AT)) \
 	$(if $(filter grid,$(strip $(MAP))),,--real $(strip $(MAP))) --rsu-cpu --v2v-verify \
+	$(if $(filter-out 0,$(strip $(EMERGENCY))),--emergency-ratio $(strip $(EMERGENCY))) \
+	$(if $(strip $(EV_PRIORITY)),--emergency-priority) \
 	--privacy-log --compute-times experiments/compute_times_v3.json
 demo: $(PY)
 	$(DEMO) --out experiments/results/demo/Phase-I
@@ -136,6 +147,13 @@ demo: $(PY)
 PROFILE ?= v3-fast
 live: $(PY)
 	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --live-pace $(strip $(PACE)) $(if $(strip $(ALL)),--live-all) --out experiments/results/live/$(PROFILE)
+
+# the same run as a live map in the browser (http://127.0.0.1:8765): click a vehicle or RSU for its
+# details; pause and speed on the page (PACE sets the starting speed, 1 = real time)
+VIZ_PORT ?= 8765
+viz: $(PY)
+	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --viz --viz-port $(VIZ_PORT) \
+	    --live-pace $(if $(filter 0,$(strip $(PACE))),1,$(strip $(PACE))) --out experiments/results/viz/$(PROFILE)
 
 # replay a finished run the same way, without simulating (RUN=<run folder>, SPEED=sim s per s)
 RUN ?= experiments/results/demo/v3-fast

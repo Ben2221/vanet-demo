@@ -1,5 +1,15 @@
 # How this project works, from zero
 
+**Privacy-Preserving Authentication and Authorization for VANETs Using Blockchain and
+Zero-Knowledge Proofs**, Bachelor Thesis Project, IIIT Kottayam. Guide: **Dr. Deepak Jose**.
+
+| Roll no. | Member | Part (Person in the code and docs) |
+|---|---|---|
+| 2023BCY0009 | Ben Savio | Person 1: SUMO mobility, ns-3 802.11p network, ledger bridge, integration |
+| 2023BCY0010 | Harsh Kumar Gour | Person 2: Hyperledger Fabric network, chaincode, gateway |
+| 2023BCY0063 | Byreddy Varshith Reddy | Person 3: authentication protocol (ZKP, tickets, handover, revocation) |
+| 2023BCY0024 | Andela Harsha Vardhan | Person 4: misbehaviour detection and evaluation |
+
 This guide assumes no background in vehicular networks, cryptography or blockchains. Read it
 top to bottom once, then use it as a reference. Commands are run from the `vanet-demo` folder.
 
@@ -101,6 +111,27 @@ They come in two profiles.
 
 It is slower: a ticket takes 7.5 ms instead of 1.6 ms. That is the price of privacy.
 
+### Emergency vehicles
+
+This is slide 13's access rule in action: Access = valid proof ∧ not revoked ∧ Policy(class, service).
+
+- **Registration:** the authority registers an ambulance with class **emergency**. The class is
+  part of the Merkle leaf, so a car cannot claim it; its proof would fail.
+- **Login:** the ambulance logs in for the service **emergency-priority**, which the policy on
+  the blockchain allows to class emergency only. A car asking for it gets `policy_denied`.
+- **Siren on:** every BSM carries a signed "ev" flag and the full ticket, is never held back by
+  dead reckoning, and is processed by cars up to 300 m away, not only within 100 m.
+  Receivers honour the flag only if the RSU-signed class in the ticket is emergency.
+- **Fake siren** (`--attack fake_emergency`): a car that sets the flag is rejected by every
+  receiver. Because the message is signed, it is proof of the lie on its own, so the first RSU
+  reports it at once.
+- **Priority** (`--emergency-priority`): RSUs check emergency logins ahead of their queue, at
+  most 5 per second each. That cap limits what false claims can take from everyone else.
+
+`make emergency` measures it on LuST mid-day and rush hour. It reports emergency vs normal
+ticket time, the share of nearby cars warned within 1 s, alert delay, and fake alerts accepted
+(which must be 0).
+
 ## 5. How the experiments work
 
 ```
@@ -145,6 +176,7 @@ SUMO (where cars drive) ──► ns-3 (802.11p radio: who hears what, when, col
 
 | Command | Time | What you see |
 |---|---|---|
+| `make viz` | ~1 min | **Live map in the browser** (http://127.0.0.1:8765): the real road network, cars and RSUs moving; click a car or an RSU for its pseudonym, ticket, class, revocation state, load and recent events; pause and speed on the page. Same settings as `make live`, e.g. `make viz MAP=lust:low EMERGENCY=0.05 EV_PRIORITY=1`; `#rsu4` in the address selects RSU 4 |
 | `make live` | ~30 s | One ns-3 run narrated live in the terminal: cars joining, the attack, detection, quarantine, blockchain revocation, the attacker shut out, and a status line every 5 s |
 | `make live CARS=100 SIM_TIME=300 RSU_SPACING=333 PACE=1` | 5 min | Change the scenario: 100 cars, 300 simulated s, 16 RSUs, shown in real time. Also `ATTACKERS=0.2`, `ATTACK_TYPE=const_speed`, `ATTACK_AT=30`, `MAP=lust:mid` (real Luxembourg traffic) |
 | `make live PROFILE=Phase-I` | ~40 s | The same for the original design. Compare the "BSM bytes" in the status lines |
@@ -159,6 +191,15 @@ SUMO (where cars drive) ──► ns-3 (802.11p radio: who hears what, when, col
 
 `metrics.csv` in any run folder is the raw truth: every number on the page can be recomputed
 from it.
+
+### Presenting it as a team (about 15 minutes)
+
+| Who | Part | Show |
+|---|---|---|
+| Ben Savio (Person 1) | the problem, the system, the simulation | the slides on the problem, then `make viz`: the map, RSUs, cars joining, click a car |
+| Byreddy Varshith Reddy (Person 3) | the protocol | click a car: pseudonym, ticket, class; the zero-knowledge login, handover, renewal; v3's TESLA and smaller messages; `make test` |
+| Harsh Kumar Gour (Person 2) | the blockchain | `make fabric-up`, `make gateway`, `ledger/demo_flow.sh`: 2 reports revoke, 3 of 3 approvals unmask, 403 for an RSU changing policy |
+| Andela Harsha Vardhan (Person 4) | detection and results | the attack and fake siren on the map, the detector, VeReMi F1, the results page, limitations |
 
 ## 8. The main results (ns-3, 150 cars, 5 seeds)
 

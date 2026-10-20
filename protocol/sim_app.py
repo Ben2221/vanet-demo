@@ -43,6 +43,21 @@ v3 options (docs/interfaces.md, "v3 options"; all off by default):
                         weight of RSUs whose reports were wrong (--faulty-rsus F makes a
                         fraction F of the RSUs report random honest pseudonyms)
 
+Emergency vehicles (all off by default):
+
+  --emergency-ratio R   a fraction R of the honest vehicles are emergency vehicles: registered
+                        with class "emergency" (bound into the Merkle leaf / BBS credential) and
+                        authenticated for EMERGENCY_SERVICE, which the policy allows to that
+                        class only. With the siren on (the whole run) every BSM is signed, carries
+                        the full ticket and the flag "ev"; receivers accept the flag only under a
+                        ticket whose RSU-signed class is "emergency" (else "fake_emergency"; a
+                        signed fake is reported at once, it is its own evidence)
+  --emergency-priority  RSUs verify logins for EMERGENCY_SERVICE ahead of their CPU queue,
+                        at most EV_PRIORITY_PER_S per second each (a false claim costs a
+                        priority slot once, then the claimant queues like everyone else)
+  --attack fake_emergency  attackers try to log in for EMERGENCY_SERVICE once, then set the
+                        "ev" flag on their BSMs from --attack-start
+
 Statistics that are not single events (acceptance latencies, CPU load, awareness
 error, V2V results) go to <out>/protocol_stats.json at the end of the run.
 
@@ -72,7 +87,7 @@ from .registration import create_pseudonyms, register_pseudonyms
 from .rsu import RSU
 from .tesla import DEFAULT_DELAY, DEFAULT_INTERVAL, DEFAULT_SKEW, Receiver
 from .v2v import V2VVerifier
-from .vehicle import Vehicle, adaptive_anchor_period, bbs_pseudonyms
+from .vehicle import EMERGENCY_CLASS, Vehicle, adaptive_anchor_period, bbs_pseudonyms
 
 SERVICE, CLASS = "road_access", "car"
 EPOCH = 1
@@ -111,6 +126,10 @@ BBS_J = 32                   # --credential bbs: pseudonyms per credential and e
 FAULTY_START, FAULTY_PERIOD = 10.0, 5.0   # --faulty-rsus: a false report every 5 s from t = 10 s
 RSSI_SHADOW_DB = 4.0         # log-normal shadowing of the modelled received power (dB, 1 sigma)
 ADAPT_HIGH, ADAPT_LOW, ADAPT_HOLD = 0.30, 0.20, 1.0   # --adaptive-auth: TESLA above 0.30 CBR, sign below 0.20
+EMERGENCY_SERVICE = "emergency-priority"   # the policy allows it to EMERGENCY_CLASS only
+EV_PRIORITY_PER_S = 5        # --emergency-priority: priority-lane logins per RSU per second
+EV_WARN_RANGE, EV_WARN_FRESH = 300.0, 1.0   # a vehicle within 300 m of an emergency vehicle should
+                                            # hold a verified alert from it at most 1 s old
 
 __all__ = ["setup", "teardown", "create_vehicle", "create_rsu", "message_type"]
 
@@ -134,8 +153,45 @@ def _stats(env) -> dict:
             "mix_changes": 0, "forced_changes": 0, "cluster_switches": 0, "faulty_reports": 0,
             "trust_updates": 0, "filter_bytes": [], "signed_bsms": 0, "tesla_bsms": 0,
             "mode_changes": 0, "renewals": 0, "silent_s": 0.0,
+            "ev": {"sent": 0, "v2v_accepted": 0, "lat": [], "fake_sent": 0, "fake_accepted": 0,
+                   "fake_rejected_v2v": 0, "fake_rejected_rsu": 0, "warned": 0, "in_range": 0,
+                   "priority": 0, "priority_capped": 0, "priority_false_claims": 0},
         }
     return st
+
+
+def _emergency_on(cfg: dict) -> bool:
+    return float(cfg.get("emergency_ratio") or 0) > 0 or cfg.get("attack") == "fake_emergency"
+
+
+def _is_emergency(node, cfg: dict) -> bool:
+    """--emergency-ratio: a fixed, seed-dependent choice among the honest vehicles (a hash,
+    not the scenario RNG, so the rest of the run draws the same random numbers)."""
+    ratio = float(cfg.get("emergency_ratio") or 0)
+    if ratio <= 0 or getattr(node, "is_attacker", False):
+        return False
+    h = hashlib.sha256(f"{cfg.get('seed', 1)}:{node.name}:emergency".encode()).digest()
+    return int.from_bytes(h[:8], "big") / 2 ** 64 < ratio
+
+
+def _ev_awareness(env) -> None:
+    """Every second: of the vehicles within EV_WARN_RANGE of an authenticated emergency vehicle,
+    how many accepted an alert from it in the last EV_WARN_FRESH s (ground truth by node)."""
+    ev = _stats(env)["ev"]
+    now = env.rsus[0].now()
+    for e in env.vehicles:
+        if not e.active or not e.app.emergency or not e.app.vehicle.ticket_valid():
+            continue
+        ex, ey = e.position()
+        for v in env.vehicles:
+            if v is e or not v.active or v.app.v2v is None:
+                continue
+            x, y = v.position()
+            if math.hypot(x - ex, y - ey) <= EV_WARN_RANGE:
+                ev["in_range"] += 1
+                t = v.app.ev_heard.get(e.id)
+                ev["warned"] += t is not None and now - EV_WARN_FRESH <= t <= now
+    env.rsus[0].schedule(1.0, _ev_awareness, env)
 
 
 def _send_time(payload: dict, rx: float) -> float | None:
@@ -188,6 +244,8 @@ class CpuQueue:
         self.pending: list = []
         self.flush_at: float | None = None
         self.batches: list[int] = []
+        self.jobs: deque[tuple[float, float]] = deque()     # (start, end) of queued work, for run_priority
+        self.prio_free_at = 0.0
 
     def backlog(self) -> float:
         return max(0.0, self.free_at - self.node.now())
@@ -198,7 +256,26 @@ class CpuQueue:
         start = max(self.node.now(), self.free_at)
         self.free_at = start + cost
         self.busy += cost
+        self.jobs.append((start, self.free_at))
+        while self.jobs and self.jobs[0][1] <= self.node.now():
+            self.jobs.popleft()
         return self.free_at
+
+    def run_priority(self, cost: float) -> float:
+        """--emergency-priority: ``cost`` s of work ahead of the queue. It waits only for the job
+        in progress (no preemption) and for earlier priority work; everything that arrives later
+        queues behind it. Work queued before keeps its finish times (an approximation: for these
+        few jobs the processor is booked twice)."""
+        cost *= self.scale
+        now = self.node.now()
+        while self.jobs and self.jobs[0][1] <= now:
+            self.jobs.popleft()
+        current = self.jobs[0][1] if self.jobs and self.jobs[0][0] <= now else now
+        start = max(current, self.prio_free_at)
+        self.prio_free_at = start + cost
+        self.free_at = max(self.free_at, start) + cost
+        self.busy += cost
+        return self.prio_free_at
 
     def add_signature(self, single: float, invalid: bool, done) -> None:
         if not self.pending and self.backlog() <= 0:
@@ -272,6 +349,8 @@ def setup(env) -> None:
         if pseudonyms:
             register_pseudonyms(pseudonyms, _RootPublisher(env.bridge), valid_until=1e9)
     env.bridge.preload("TA", "set_policy", service=SERVICE, classes=["car", "truck", "emergency"])
+    if _emergency_on(cfg):
+        env.bridge.preload("TA", "set_policy", service=EMERGENCY_SERVICE, classes=[EMERGENCY_CLASS])
     env.shared["junctions"] = _junctions(cfg.get("net_file")) if cfg.get("mix_zones") else []
     env.shared["attackers"] = {v.name for v in env.vehicles if v.is_attacker}
     n_faulty = int(round(float(cfg.get("faulty_rsus") or 0) * len(env.rsus)))
@@ -303,6 +382,8 @@ def setup(env) -> None:
             node = by_name[rsu_name]
             node.app.escrow[rec_id] = RSUEscrowAgent(rsu_name, share, node.ledger)
     env.rsus[0].schedule(1.0, _ta_loop, env)
+    if _emergency_on(cfg) and cfg.get("v2v_verify"):
+        env.rsus[0].schedule(1.0, _ev_awareness, env)
 
 
 def teardown(env) -> None:
@@ -365,6 +446,19 @@ def teardown(env) -> None:
         "trust_weights": {r: w for r, (_, _, w) in env.shared.get("ta", {}).get("trust", {}).items()},
         "filter_bytes": summ(st["filter_bytes"]),
     }
+    if _emergency_on(env.config):
+        ev = st["ev"]
+        out["emergency"] = {
+            "vehicles": sorted(v.name for v in env.vehicles if v.app.emergency),
+            "alerts_sent": ev["sent"], "alerts_accepted_v2v": ev["v2v_accepted"],
+            "alert_latency_ms": summ(ev["lat"], 1000),
+            "warned_ratio": ev["warned"] / ev["in_range"] if ev["in_range"] else None,
+            "warn_samples": ev["in_range"],
+            "fake_alerts_sent": ev["fake_sent"], "fake_alerts_accepted": ev["fake_accepted"],
+            "fake_rejected_v2v": ev["fake_rejected_v2v"], "fake_rejected_rsu": ev["fake_rejected_rsu"],
+            "priority_logins": ev["priority"], "priority_capped": ev["priority_capped"],
+            "priority_false_claims": ev["priority_false_claims"],
+        }
     (env.out_dir / "protocol_stats.json").write_text(json.dumps(out, indent=2))
 
 
@@ -473,6 +567,8 @@ class RsuApp:
         if self.cpu is not None:
             env.shared.setdefault("cpus", []).append(("rsu", node.name, self.cpu))
         self.rf = bool(cfg.get("revocation_filter"))
+        self.ev_priority = bool(cfg.get("emergency_priority")) and self.cpu is not None
+        self.prio_times: deque[float] = deque()
         self.beacons = 0
         self.recent_pids: deque[str] = deque(maxlen=200)
         radio = cfg.get("radio") or {}
@@ -585,11 +681,14 @@ class RsuApp:
         issue = [o for o in ops if o in ("sign", "ecqv_issue", "ecqv_reconstruct")]
         verify_cost = self._cost(node, [o for o in ops if o not in issue])
         delay = verify_cost
-        if self.cpu is not None:
-            delay = self.cpu.run(verify_cost) - node.now()
+        run = self.cpu.run if self.cpu is not None else None
+        if self.ev_priority and self._priority(node, data, res):
+            run = self.cpu.run_priority
+        if run is not None:
+            delay = run(verify_cost) - node.now()
         if res["ok"]:
             node.log("AUTH_VERIFY", len(data), delay * 1000, pid)
-            delay = (self.cpu.run(self._cost(node, issue)) - node.now()) if self.cpu else delay + self._cost(node, issue)
+            delay = (run(self._cost(node, issue)) - node.now()) if run else delay + self._cost(node, issue)
         else:
             node.log("AUTH_REJECT", len(data), delay * 1000, f"{pid}:{res['reason']}")
         extra = {"r": res["r"]} if res.get("r") else {}
@@ -601,6 +700,25 @@ class RsuApp:
             for i, name in enumerate(self.preauth_targets, 1):
                 pre = self.rsu.preauthorize_neighbour(name, res["ticket"])
                 node.backbone_send(name, pre, delay=delay + i * node.processing_delay("sign"))
+
+    def _priority(self, node, data: bytes, res: dict) -> bool:
+        """--emergency-priority: a login that claims EMERGENCY_SERVICE goes ahead of the queue,
+        at most EV_PRIORITY_PER_S per second (the claim is only checked by the verification
+        itself, so the cap bounds what false claims can take from everyone else)."""
+        f = _fields(data) or {}
+        if f.get("service") != EMERGENCY_SERVICE:
+            return False
+        ev = _stats(node.env)["ev"]
+        now = node.now()
+        while self.prio_times and now - self.prio_times[0] >= 1.0:
+            self.prio_times.popleft()
+        if len(self.prio_times) >= EV_PRIORITY_PER_S:
+            ev["priority_capped"] += 1
+            return False
+        self.prio_times.append(now)
+        ev["priority"] += 1
+        ev["priority_false_claims"] += not res["ok"]
+        return True
 
     def _handover(self, node, data: bytes, sender: int) -> None:
         """Handover: ticket signature + request signature, then the shared authorization (ledger or PREAUTH)."""
@@ -664,6 +782,11 @@ class RsuApp:
             if (pid, res["reason"]) not in self.reject_logged:
                 self.reject_logged.add((pid, res["reason"]))
                 node.log("BSM_REJECT", len(data), None, f"{pid}:{res['reason']}")
+            if res["reason"] == "fake_emergency":
+                _stats(node.env)["ev"]["fake_rejected_rsu"] += 1
+                if res.get("reported"):
+                    node.log("FAKE_EMERGENCY", len(data), None, pid)
+                    self._reported(node, pid, res)
             return
         self.recent_pids.append(pid)
         log = node.env.shared.get("detector_log")
@@ -677,12 +800,18 @@ class RsuApp:
             self.flag_logged.add(pid)
             node.log("DETECT_FLAG", len(data), None, pid)
         if res["reported"]:
-            node.log("REPORT", 0, None, pid)
-            if self.fast_revocation:
-                note = self.rsu.make_quarantine(pid, res["evidence"])
-                for name in self.neighbours:
-                    node.backbone_send(name, note, delay=node.processing_delay("sign"))
-                node.log("QUARANTINE_SENT", len(note), None, f"{pid}:{len(self.neighbours)}")
+            self._reported(node, pid, res)
+        elif res.get("blocked"):
+            self._log_block(node, pid)
+
+    def _reported(self, node, pid: str, res: dict) -> None:
+        """This RSU reported ``pid`` to the ledger: log it, quarantine notes to the neighbours."""
+        node.log("REPORT", 0, None, pid)
+        if self.fast_revocation:
+            note = self.rsu.make_quarantine(pid, res["evidence"])
+            for name in self.neighbours:
+                node.backbone_send(name, note, delay=node.processing_delay("sign"))
+            node.log("QUARANTINE_SENT", len(note), None, f"{pid}:{len(self.neighbours)}")
         if res.get("blocked"):
             self._log_block(node, pid)
 
@@ -692,18 +821,27 @@ class VehicleApp:
     def __init__(self, node, env) -> None:
         cfg = env.config
         self.mix = bool(cfg.get("mix_zones"))
+        # --emergency-ratio: the class is fixed at registration (TA), the service follows from it
+        self.emergency = _is_emergency(node, cfg)
+        vclass = EMERGENCY_CLASS if self.emergency else CLASS
+        self.service = EMERGENCY_SERVICE if self.emergency else SERVICE
+        self.ev_on = _emergency_on(cfg)
+        self.fake_ev = getattr(node, "is_attacker", False) and cfg.get("attack") == "fake_emergency"
+        self.fake_ev_tried = False
+        self.attack_start = float(cfg.get("attack_start") or 0.0)
+        self.ev_heard: dict[int, float] = {}              # emergency sender node -> last accepted alert
         credential, index = None, None
         if cfg.get("credential") == "bbs":
             from . import bbs
             issuer = env.shared.get("bbs_issuer")
             if issuer is None:
                 issuer = env.shared["bbs_issuer"] = bbs.IssuerKey.generate()
-            credential = bbs.enroll(issuer, CLASS, EPOCH)
+            credential = bbs.enroll(issuer, vclass, EPOCH)
             pseudonyms, index = bbs_pseudonyms(credential, int(cfg.get("bbs_j") or BBS_J))
         else:
             count = int(cfg.get("pseudonyms") or (PSEUDONYMS_MIX if self.mix else PSEUDONYMS_PER_VEHICLE))
-            pseudonyms = create_pseudonyms(count, EPOCH, CLASS)
-        self.vehicle = Vehicle(pseudonyms, CLASS,
+            pseudonyms = create_pseudonyms(count, EPOCH, vclass)
+        self.vehicle = Vehicle(pseudonyms, vclass,
                                trusted_rsu_keys=env.shared.setdefault("rsu_keys", {}),
                                pseudonym_switch_after=10 ** 9 if self.mix else SESSIONS_PER_PSEUDONYM,
                                clock=node.now,
@@ -770,6 +908,8 @@ class VehicleApp:
             node.log("PID_ASSIGN", 0, None, pid)
 
     def on_start(self, node) -> None:
+        if self.emergency:
+            node.log("EMERGENCY_ROLE", 0, None, EMERGENCY_CLASS)    # ground truth for evaluation
         self._log_pid(node)
 
     def on_stop(self, node) -> None:
@@ -784,13 +924,19 @@ class VehicleApp:
             return b""          # no authenticated BSM before the first ticket (or while silent)
         st = _stats(node.env)
         urgent = self._urgent(state, sim_time)
+        # siren on: every BSM is an alert, signed and with the full ticket, never held back
+        ev = self.emergency or (self.fake_ev and sim_time >= self.attack_start)
         err = self._prediction_error(state, sim_time)
         if err is not None and not node.is_attacker:
             st["awareness"].append(err)
-        if self.dr and not urgent and not self._dr_due(state, sim_time, err):
+        if self.dr and not (urgent or ev) and not self._dr_due(state, sim_time, err):
             st["dr_skipped"] += 1
             return b""
         st["urgent"] += urgent
+        if ev:
+            st["ev"]["fake_sent" if self.fake_ev else "sent"] += 1
+            v.send_full_ticket()
+            urgent = True
         kin = dict(seq=state["seq"], t=sim_time, x=state["x"], y=state["y"],
                    speed=state["speed"], heading=state["heading"])
         if self.tesla:
@@ -800,12 +946,12 @@ class VehicleApp:
                 sign = sign or self.sign_mode
             # in sign mode the chain commitment rides on every anchor_every-th BSM only
             commit = not (self.adaptive_auth and self.sign_mode) or self.signed_count % self.base_anchor == 0
-            data = v.make_bsm(urgent=sign, commit=commit, **kin)
+            data = v.make_bsm(urgent=sign, commit=commit, ev=ev, **kin)
             if v.last_bsm_anchor:
                 self.signed_count += 1
             st["signed_bsms" if v.last_bsm_anchor else "tesla_bsms"] += 1
         elif not self.mac:
-            data = v.make_bsm(urgent=urgent, **kin)
+            data = v.make_bsm(urgent=urgent, ev=ev, **kin)
         else:
             if self.adaptive_anchor:
                 cbr = node.channel_busy_ratio()
@@ -816,7 +962,7 @@ class VehicleApp:
             # heard in the last LOST_RSU_AFTER s, with a beacon verified at most BEACON_REVERIFY s before that
             recent = sorted((t, r) for r, t in self.heard.items() if sim_time - t <= LOST_RSU_AFTER
                             and sim_time - self.verified_heard.get(r, -math.inf) <= LOST_RSU_AFTER + BEACON_REVERIFY)
-            data = v.make_bsm(mac_rsus=[r for _, r in reversed(recent)], urgent=urgent, **kin)
+            data = v.make_bsm(mac_rsus=[r for _, r in reversed(recent)], urgent=urgent, ev=ev, **kin)
         self.last_sent = (sim_time, state["x"], state["y"], state.get("vx", 0.0), state.get("vy", 0.0),
                           state["speed"], state["heading"])
         st["bsm_tx"] += 1
@@ -963,7 +1109,10 @@ class VehicleApp:
         px, py = node.peer_position(src)
         x, y = node.position()
         st = _stats(node.env)["v2v"]
-        if math.hypot(px - x, py - y) > self.v2v_radius:
+        d = math.hypot(px - x, py - y)
+        # emergency alerts matter from EV_WARN_RANGE, not only inside the safety radius
+        alert = self.ev_on and d <= EV_WARN_RANGE and self._is_alert(data)
+        if d > self.v2v_radius and not alert:
             if len(data) > FULL_TICKET_BSM_BYTES and self.cpu.backlog() <= CPU_MAX_WAIT:
                 self.v2v.learn(data)                       # ticket of a sender that may come closer
                 if self.v2v.ops:
@@ -977,7 +1126,9 @@ class VehicleApp:
             return
         results = self.v2v.receive(data, sim_time)
         ledger = node.env.ta_ledger
-        attacker = node.env.node_by_id(src).is_attacker if hasattr(node.env, "node_by_id") else False
+        sender = node.env.node_by_id(src) if hasattr(node.env, "node_by_id") else None
+        attacker = sender.is_attacker if sender is not None else False
+        ev = _stats(node.env)["ev"]
 
         def done(t_end: float, results=results) -> None:
             for res in results:
@@ -991,14 +1142,33 @@ class VehicleApp:
                     t_sent = _send_time(res["payload"], res.get("rx_time", sim_time))
                     if t_sent is not None:
                         st["lat"].append(t_end - t_sent)
+                    if res["payload"].get("ev"):
+                        # ground truth: an accepted alert from anyone but an emergency vehicle is a failure
+                        if sender is None or not sender.app.emergency:
+                            ev["fake_accepted"] += 1
+                        else:
+                            ev["v2v_accepted"] += 1
+                            self.ev_heard[src] = t_end
+                            if t_sent is not None:
+                                ev["lat"].append(t_end - t_sent)
                 else:
                     reason = res.get("reason", "?")
                     st["rejected"][reason] += 1
                     if reason == "revoked_filter":
                         st["filter_true" if revoked else "filter_fp"] += 1
                         st["filter_attacker" if attacker else "filter_honest"] += 1
+                    elif reason == "fake_emergency":
+                        ev["fake_rejected_v2v"] += 1
 
         _verify_with_cpu(node, self.cpu, list(self.v2v.ops), done)
+
+    @staticmethod
+    def _is_alert(data: bytes) -> bool:
+        """A BSM with the "ev" flag (decoded once per broadcast: the decode cache)."""
+        if message_type(data) != "BSM":
+            return False
+        f = _fields(data) or {}
+        return isinstance(f.get("payload"), dict) and bool(f["payload"].get("ev"))
 
     def _beacon(self, node, beacon: dict, sim_time: float, rsu_node: int) -> None:
         payload = beacon.get("payload", {})
@@ -1019,7 +1189,9 @@ class VehicleApp:
         if self.pending or sim_time < self.retry_after or self._silent(node, sim_time):
             return
         v = self.vehicle
-        if not v.ticket_valid(margin=RENEW_BEFORE):
+        if self.fake_ev and not self.fake_ev_tried and sim_time >= self.attack_start:
+            self._send_auth(node, rsu, beacon, sim_time, rsu_node)    # the fake emergency login
+        elif not v.ticket_valid(margin=RENEW_BEFORE):
             if self.renewal and v.ticket_valid() and v.sessions_on_current < v.pseudonym_switch_after:
                 self._send_renew(node, rsu, beacon, sim_time, rsu_node)
             else:
@@ -1087,8 +1259,14 @@ class VehicleApp:
 
     def _send_auth(self, node, rsu: str, beacon: dict, sim_time: float, rsu_node: int) -> None:
         before = self.vehicle.current.pid
+        service = self.service
+        if self.fake_ev and not self.fake_ev_tried and sim_time >= self.attack_start:
+            # --attack fake_emergency: one attempt to log in for the emergency service
+            self.fake_ev_tried = True
+            service = EMERGENCY_SERVICE
+            node.log("FAKE_EMERGENCY_LOGIN", 0, None, rsu)
         try:
-            req = self.vehicle.make_auth_request(beacon, SERVICE)
+            req = self.vehicle.make_auth_request(beacon, service)
         except ValueError:
             node.log("BEACON_REJECT", 0, None, rsu)
             return
@@ -1144,6 +1322,9 @@ class VehicleApp:
             v.ticket = None                             # full authentication on the next beacon
         else:
             node.log("AUTH_REJECTED", nbytes, latency, f"{rsu}:{f.get('reason')}")
+            if f.get("reason") == "policy_denied":
+                self.retry_after = sim_time + 2.0       # the service is not for this class: nothing to change
+                return
             self.revoked_in_a_row = self.revoked_in_a_row + 1 if f.get("reason") == "revoked" else 0
             if self.revoked_in_a_row >= len(v.pseudonyms):
                 node.log("ALL_PSEUDONYMS_REVOKED", 0, None, "")

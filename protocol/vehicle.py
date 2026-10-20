@@ -42,6 +42,7 @@ def _ticket_digest(ticket: dict) -> str:
     return hashlib.sha256(canonical_json(core)).hexdigest()[:16]
 
 MAX_MAC_TAGS = 3
+EMERGENCY_CLASS = "emergency"   # the only class whose BSMs may carry the "ev" (siren on) flag
 
 def adaptive_anchor_period(cbr: float, base: int, current: int | None = None, band: float = 0.02) -> int:
     """--adaptive-anchor: anchor period for a measured channel busy ratio, monotone in cbr.
@@ -361,11 +362,12 @@ class Vehicle:
                             kd=self.tesla.key(j).hex()).to_bytes()
 
     def make_bsm(self, *, mac_rsus: Iterable[str] = (), urgent: bool = False, commit: bool = True,
-                 **safety_fields) -> bytes:
+                 ev: bool = False, **safety_fields) -> bytes:
         """Create a signed BSM carrying the current pseudonym and current ticket (or its digest).
         The verifying key is the one in the ticket, so no separate key is sent; the digest
         is inside the signed payload. In mac mode a non-anchor BSM is MAC'd for the current
-        RSU and ``mac_rsus`` (RSUs heard recently) instead of signed."""
+        RSU and ``mac_rsus`` (RSUs heard recently) instead of signed. ``ev`` marks an emergency
+        alert (siren on); receivers honour it only under a ticket of class "emergency"."""
         p = self.current
         if self.ticket is None:
             raise RuntimeError("cannot send authenticated BSM without a ticket")
@@ -376,6 +378,8 @@ class Vehicle:
             payload = {"pid": p.pid, "k": pack_kinematics(safety_fields)}
         else:
             payload = {"pid": p.pid, "fields": safety_fields}
+        if ev:
+            payload["ev"] = 1
         full = self._full_ticket_next()
         if full:
             payload["ticket"] = self.ticket

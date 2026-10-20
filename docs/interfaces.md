@@ -188,6 +188,15 @@ New events: `RENEW_OK` / `RENEW_FALLBACK` (vehicle, ms), `AUTH_MODE` (`sign|tesl
 report, also logged as `REPORT`), `TRUST_UPDATE` (`rsu:weight`), `INVESTIGATION_HONEST`
 (pid), `PSEUDONYM_CHANGE` with `mix ...` / `forced` / `mix joined`.
 
+Emergency vehicles (`--emergency-ratio R`, `--emergency-priority`, `--attack fake_emergency`;
+protocol/sim_app.py has the details): the vehicle class is fixed at registration, the service
+`emergency-priority` is allowed to class `emergency` only, and a BSM may carry `"ev": 1` in its
+signed payload (siren on), which receivers honour only under a ticket of class `emergency`
+(else reason `fake_emergency`; a signed one is reported at once). New events: `EMERGENCY_ROLE`
+(vehicle), `FAKE_EMERGENCY` (RSU, pid it reported), `FAKE_EMERGENCY_LOGIN` (vehicle, rsu).
+`protocol_stats.json` gets an `emergency` block; collect.py the `ev_*` and `fake_*` columns.
+Wire format: `"ev"`, `"emergency-priority"`, `"fake_emergency"` are appended to the interned names.
+
 ## 3. Node hooks (Person 1 → Person 3)
 
 Person 3's package `protocol/` must expose (module level):

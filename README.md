@@ -1,5 +1,15 @@
 # VANET Authentication Demo
 
+**Privacy-Preserving Authentication and Authorization for VANETs Using Blockchain and
+Zero-Knowledge Proofs**, Bachelor Thesis Project, IIIT Kottayam. Guide: **Dr. Deepak Jose**.
+
+| Roll no. | Member | Part (Person in the code and docs) |
+|---|---|---|
+| 2023BCY0009 | Ben Savio | Person 1: SUMO mobility, ns-3 802.11p network, ledger bridge, integration |
+| 2023BCY0010 | Harsh Kumar Gour | Person 2: Hyperledger Fabric network, chaincode, gateway |
+| 2023BCY0063 | Byreddy Varshith Reddy | Person 3: authentication protocol (ZKP, tickets, handover, revocation) |
+| 2023BCY0024 | Andela Harsha Vardhan | Person 4: misbehaviour detection and evaluation |
+
 Vehicles drive on real roads in SUMO and talk over IEEE 802.11p in ns-3. They
 authenticate anonymously to roadside units (RSUs) with zero-knowledge proofs;
 authorization, revocation and identity-reveal approvals live on Hyperledger

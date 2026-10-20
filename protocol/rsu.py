@@ -17,7 +17,7 @@ from .crypto import (verify_merkle, verify, schnorr_sign, schnorr_verify, bip340
                      bsm_tag_ok, SchnorrProof)
 from .messages import Message, make_message, unpack_kinematics
 from .registration import pseudonym_leaf
-from .vehicle import auth_context, bind_context, canonical_json, ticket_digest
+from .vehicle import EMERGENCY_CLASS, auth_context, bind_context, canonical_json, ticket_digest
 
 def _usable(features: Any) -> bool:
     """Detector answer that belongs in the sender's history: no error, not a foreign copy."""
@@ -654,6 +654,17 @@ class RSU:
                 return {"ok": False, "reason": "expired_or_revoked", "pid": pid}
             if self.quarantined(pid):
                 return {"ok": False, "reason": "quarantined", "pid": pid}
+            if payload.get("ev") and ticket_payload.get("class") != EMERGENCY_CLASS:
+                # "siren on" under a non-emergency ticket. Signed, the message is its own
+                # evidence: report at once. A MAC'd one proves nothing to a third party.
+                out = {"ok": False, "reason": "fake_emergency", "pid": pid}
+                if not mac and pid not in self.reported:
+                    self.reported.add(pid)
+                    evidence = hashlib.sha256(message_bytes).hexdigest()
+                    self.ledger.report_misbehaviour(pid, evidence)
+                    out.update(reported=True, evidence=evidence,
+                               blocked=self._add_reporter(pid, self.rsu_id) if self.quarantine_k > 0 else False)
+                return out
             st = self._state(pid)
             if mac and st.mac_run >= self.mac_run_limit:
                 return {"ok": False, "reason": "anchor_overdue", "pid": pid}

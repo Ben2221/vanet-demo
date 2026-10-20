@@ -71,6 +71,8 @@ INTERNED = [
     "tesla_late", "invalid_tesla_mac", "tesla_no_key", "ticket_wrong_cluster", "invalid_cert",
     "cluster_ticket", "j_out_of_range", "urgent",
     "renew", "renewed",
+    # emergency vehicles (--emergency-ratio)
+    "ev", "emergency-priority", "fake_emergency",
 ]
 _INTERN_INDEX = {s: i for i, s in enumerate(INTERNED)}
 _HEX = re.compile(r"^(?:[0-9a-f]{2})+$")

@@ -35,6 +35,13 @@ METRICS = [
     ("report->block s", "report_to_block_s_mean", "{:.2f}", "low"),
     ("tracked", "tracking_success", "{:.2f}", "low"),
     ("trip traced", "traceable_fraction", "{:.2f}", "low"),
+    ("EV ticket ms", "ev_ticket_ms_mean", "{:.2f}", "low"),
+    ("EV ticket p95 ms", "ev_ticket_ms_p95", "{:.1f}", "low"),
+    ("other ticket ms", "other_ticket_ms_mean", "{:.2f}", "low"),
+    ("warned within 1 s", "ev_warned_ratio", "{:.3f}", "high"),
+    ("alert ms", "ev_alert_ms_mean", "{:.2f}", "low"),
+    ("fake alerts accepted", "fake_alerts_accepted", "{:.0f}", "low"),
+    ("fake logins denied", "fake_logins_denied", "{:.1f}", "high"),
 ]
 ARROW = {"low": "↓", "high": "↑", "": ""}
 

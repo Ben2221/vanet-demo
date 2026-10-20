@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "if present, 'none' for zero delays")
     g.add_argument("--attacker-ratio", type=float, default=0.0, help="fraction of vehicles that lie in BSMs")
     g.add_argument("--attack", default="const_pos",
-                   help="const_pos, random_pos, const_speed, random_speed, sudden_stop, flood")
+                   help="const_pos, random_pos, const_speed, random_speed, sudden_stop, flood, fake_emergency")
     g.add_argument("--attack-start", type=float, default=30.0, help="s after which attackers start lying")
 
     g = ap.add_argument_group("real protocol options")
@@ -200,6 +200,13 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--faulty-rsus", type=float, default=0.0,
                    help="fraction of RSUs that report random honest pseudonyms (compromised RSUs)")
 
+    g = ap.add_argument_group("emergency vehicles")
+    g.add_argument("--emergency-ratio", type=float, default=0.0,
+                   help="fraction of the honest vehicles registered as emergency vehicles: they log in for "
+                        "the emergency service and broadcast signed alerts (siren on)")
+    g.add_argument("--emergency-priority", action="store_true",
+                   help="RSUs verify emergency-service logins ahead of their CPU queue (needs --rsu-cpu)")
+
     g = ap.add_argument_group("measurement")
     g.add_argument("--rsu-cpu", action="store_true",
                    help="RSU crypto on one processor in arrival order: queueing in BSM acceptance latency")
@@ -236,6 +243,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="narrate the run in plain English while it runs (experiments/live.py)")
     g.add_argument("--live-all", action="store_true",
                    help="with --live: also every handover, renewal, pseudonym change and ledger write")
+    g.add_argument("--viz", action="store_true",
+                   help="live map in the browser (network/viz.py): click a vehicle or RSU for its details")
+    g.add_argument("--viz-port", type=int, default=8765)
     g.add_argument("--live-pace", type=float, default=0.0,
                    help="with --live: simulated seconds per wall second (1 = real time, 0 = as fast as possible)")
     return ap
@@ -390,6 +400,13 @@ def main(argv: list[str] | None = None) -> dict:
         narrator = Narrator(a.live_all, pace=a.live_pace, counters=lambda: {"BSMs sent": st.sent_by_type.get("BSM", 0),
                                               "BSM bytes": st.bytes_by_type.get("BSM", 0)})
         scenario.metrics.listeners.append(narrator.feed)
+    viz = None
+    if a.viz:
+        from network.viz import Viz
+        where = a.real or f"grid, {len(vehicles)} vehicles"
+        viz = Viz(scenario, str(sc["net"]), port=a.viz_port, speed=a.live_pace or 1.0,
+                  title=f"{a.profile if a.profile != 'baseline' else 'Phase-I'} on ns-3 · {where}")
+        viz.start()
     try:
         summary = scenario.run()
     finally:
@@ -397,6 +414,8 @@ def main(argv: list[str] | None = None) -> dict:
             live.close()
     if narrator:
         narrator.finish()
+    if viz:
+        viz.finish()
     summary["wall_time_s"] = round(time.time() - t_wall, 1)
     (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
     if not a.quiet:
@@ -411,6 +430,13 @@ def main(argv: list[str] | None = None) -> dict:
             print(f"channel busy ratio at RSUs: mean {summary['cbr_rsu_mean']:.3f}")
         print(f"ledger: {summary['ledger']}")
         print(f"output: {out}")
+    if viz:
+        print("viz: simulation finished; the page keeps showing the final state. Ctrl+C to quit.", flush=True)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
     return summary
 
 

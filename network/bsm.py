@@ -13,7 +13,8 @@ its own channel busy ratio; above the threshold (0.6) it halves its beacon
 rate (down to 1 Hz), below 70 % of the threshold it steps back up.
 
 Attacks for misbehaviour detection (--attacker-ratio / --attack), in the spirit
-of VeReMi: const_pos, random_pos, const_speed, random_speed, sudden_stop, flood.
+of VeReMi: const_pos, random_pos, const_speed, random_speed, sudden_stop, flood. fake_emergency
+leaves the kinematics alone: the protocol (protocol/sim_app.py) sets the emergency flag instead.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from network.scenario import Scenario
 
 BSM_TYPE = 6
-ATTACKS = ["const_pos", "random_pos", "const_speed", "random_speed", "sudden_stop", "flood"]
+ATTACKS = ["const_pos", "random_pos", "const_speed", "random_speed", "sudden_stop", "flood", "fake_emergency"]
 
 # plain BSM: type, sender name hash, seq, t, x, y, speed, heading, then padding
 _PLAIN = struct.Struct("!B8sIdddff")

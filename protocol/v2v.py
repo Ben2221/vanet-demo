@@ -14,6 +14,8 @@ vehicles. This verifier is what a vehicle can check with the information it has:
 - the revocation filter of the last verified RSU beacon (--revocation-filter): a BSM
   whose pseudonym is in the filter is dropped ("revoked_filter"). Without the filter a
   vehicle has no revocation information until the sender's ticket expires.
+- emergency alerts: a BSM with the "ev" flag is accepted only under a ticket of class
+  "emergency" ("fake_emergency" otherwise).
 
 ``ops`` lists the cryptographic operations of the last call (for the CPU model).
 """
@@ -26,7 +28,7 @@ from . import bloom, ecqv
 from .crypto import bip340_verify, schnorr_verify
 from .messages import Message
 from .tesla import Receiver
-from .vehicle import canonical_json, ticket_digest
+from .vehicle import EMERGENCY_CLASS, canonical_json, ticket_digest
 
 
 class V2VVerifier:
@@ -165,6 +167,9 @@ class V2VVerifier:
         pid = str(payload.get("pid", ""))
         if float(tp.get("expiry", 0)) <= self.clock():
             return {"ok": False, "reason": "expired", "pid": pid, "rx_time": rx_time}
+        if payload.get("ev") and tp.get("class") != EMERGENCY_CLASS:
+            # "siren on" counts only under a ticket whose RSU-signed class is emergency
+            return {"ok": False, "reason": "fake_emergency", "pid": pid, "payload": payload, "rx_time": rx_time}
         if self.filtered(pid):
             return {"ok": False, "reason": "revoked_filter", "pid": pid, "payload": payload, "rx_time": rx_time}
         return {"ok": True, "reason": "valid", "pid": pid, "payload": payload, "rx_time": rx_time}
