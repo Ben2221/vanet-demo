@@ -49,7 +49,8 @@ PSEUDONYMS_PER_VEHICLE = 5
 SESSIONS_PER_PSEUDONYM = 3
 REPORT_K, REPORT_W = 3, 10      # report after K flagged BSMs out of the last W
 NONCE_WINDOW = 1.0               # a beacon nonce is valid for 1 s
-AUTH_TTL = 300.0
+AUTH_TTL = 30.0              # ticket lifetime, as in the real protocol (protocol/sim_app.py)
+RENEW_BEFORE = 2.0
 SERVICE, CLASS = "safety", "car"
 
 
@@ -222,12 +223,13 @@ class Rsu:
         bsm = {"pid": pid_hex, "seq": seq, "t": t, "x": x, "y": y, "speed": speed, "heading": heading,
                "rsu_x": rx, "rsu_y": ry, "rx_time": sim_time, "sender": node.last_sender}
         hist = self.history.setdefault(pid_hex, deque(maxlen=20))
-        flagged, _ = self.detector(bsm, list(hist))
+        flagged, features = self.detector(bsm, list(hist))
         hist.append(bsm)
         win = self.flags.setdefault(pid_hex, deque(maxlen=REPORT_W))
         win.append(bool(flagged))
         if flagged and sum(win) == 1:
-            node.log("DETECT_FLAG", len(data), None, pid_hex)
+            fired = [k for k, v in (features or {}).items() if k in _CHECKS and v]
+            node.log("DETECT_FLAG", len(data), None, f"{pid_hex}:{'+'.join(fired)}" if fired else pid_hex)
         if sum(win) >= REPORT_K and pid_hex not in self.reported:
             self.reported.add(pid_hex)
             evidence = hashlib.sha256(data).hexdigest()
@@ -242,6 +244,7 @@ class Vehicle:
         self.pid_idx = 0
         self.sessions = 0
         self.ticket = False
+        self.ticket_until = 0.0
         self.current: int | None = None
         self.pending: tuple[int, float, str] | None = None   # rsu, t_req, kind
         self.heard: dict[int, float] = {}
@@ -291,7 +294,7 @@ class Vehicle:
             self.pending = None
         if self.pending or sim_time < self.retry_after:
             return
-        if not self.ticket:
+        if not self.ticket or sim_time >= self.ticket_until - RENEW_BEFORE:
             self._send_auth(node, rsu, nonce, sim_time)
         elif rsu != self.current and self._should_handover(node, rsu, sim_time):
             ho = _HO_REQ.pack(HANDOVER_REQ, self.pid, rsu, nonce, sim_time)
@@ -308,6 +311,11 @@ class Vehicle:
         return cur > 0.8 * rng and new < cur            # make-before-break
 
     def _send_auth(self, node, rsu: int, nonce: bytes, sim_time: float) -> None:
+        # change pseudonym at the next full authentication, as protocol/vehicle.py does; rotating
+        # right after the last session made a car that ping-pongs between two RSUs cycle its
+        # pseudonyms every few BSMs, which the detector rightly flags as sybil
+        if self.sessions >= SESSIONS_PER_PSEUDONYM:
+            self._rotate(node, "sessions")
         req = _AUTH_REQ.pack(AUTH_REQ, self.pid, rsu, nonce, sim_time, 1, 1)
         self.pending = (rsu, sim_time, "auth")
         node.send(node.last_sender, _pad(req, PROOF + 32 * MERKLE_DEPTH),
@@ -321,12 +329,12 @@ class Vehicle:
         self.pending = None
         latency = (sim_time - t_req) * 1000
         if ok:
+            if not handover:
+                self.ticket_until = t_req + AUTH_TTL
             self.ticket = True
             self.current = rsu
             self.sessions += 1
             node.log("HANDOVER_OK" if handover else "AUTH_OK", len(data), latency, f"rsu{rsu}")
-            if self.sessions >= SESSIONS_PER_PSEUDONYM:
-                self._rotate(node, "sessions")
         elif kind == "handover":
             node.log("HANDOVER_FALLBACK", len(data), latency, f"rsu{rsu}")
             self.ticket = False                         # do a full authentication next beacon
@@ -334,6 +342,11 @@ class Vehicle:
             node.log("AUTH_REJECTED", len(data), latency, f"rsu{rsu}")
             self._rotate(node, "rejected")
             self.retry_after = sim_time + 2.0
+
+
+# detector checks named in DETECT_FLAG rows (as in protocol/sim_app.py)
+_CHECKS = {"range", "speed_range", "pos_jump", "speed_cons", "pos_speed", "heading",
+           "msg_rate", "replay", "sybil", "sudden_appear", "overlap"}
 
 
 def create_vehicle(node, env):

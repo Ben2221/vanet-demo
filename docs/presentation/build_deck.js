@@ -251,6 +251,37 @@ const mid = dig.find((r) => r.vehicles === 60) || dig[0] || {};
   caption(s, "K = 1 revokes fastest but lets any single (possibly compromised) RSU revoke anyone. We keep K = 2: no single RSU can revoke.");
 }
 
+// ------------------------------------------------------------------ 10b baselines
+{
+  const sc = rows("presentation_schemes");
+  const NAME = { real: "Ours (ZKP + ledger)", "experiments.baselines.ecdsa_pki": "ECDSA certificates",
+    "experiments.baselines.central_auth": "Central authority" };
+  const order = ["real", "experiments.baselines.ecdsa_pki", "experiments.baselines.central_auth"];
+  const at60 = order.map((p) => sc.find((r) => r.protocol === p && r.vehicles === 60) || {});
+  const labels = order.map((p) => NAME[p]);
+  const s = pres.addSlide({ masterName: "CONTENT" });
+  title(s, "Against the baselines: privacy and accountability for ~1 ms");
+  s.addChart(pres.charts.BAR, [
+    { name: "auth median (ms)", labels, values: at60.map((r) => r.auth_ms_median) },
+    { name: "handover median (ms)", labels, values: at60.map((r) => r.handover_ms_median) },
+  ], { x: 0.6, y: 1.45, w: 5.6, h: 3.6, barDir: "col", ...chartBase("Latency at 60 vehicles (ms)"), chartColors: [TEAL, INK],
+    showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0.0", showLegend: true, legendPos: "b" });
+  const hdr = (t) => ({ text: t, options: { bold: true, color: WHITE, fill: { color: INK } } });
+  const yes = { text: "yes", options: { color: TEAL, bold: true } }, no = { text: "no", options: { color: RED, bold: true } };
+  s.addTable([
+    [hdr(""), hdr("Ours"), hdr("Basic ECDSA PKI"), hdr("Central")],
+    ["Security bytes / BSM", f(at60[0].security_bytes_per_bsm, 0), f(at60[1].security_bytes_per_bsm, 0), f(at60[2].security_bytes_per_bsm, 0)],
+    ["Channel busy at RSUs", f(100 * at60[0].cbr_rsu_mean, 1) + " %", f(100 * at60[1].cbr_rsu_mean, 1) + " %", f(100 * at60[2].cbr_rsu_mean, 1) + " %"],
+    ["Issuer cannot link pseudonyms", yes, no, no],
+    ["No single party can unmask", yes, no, no],
+    ["No online authority per request", yes, yes, no],
+  ], { x: 6.5, y: 1.5, w: 6.2, colW: [2.7, 1.0, 1.5, 1.0], fontFace: BODY, fontSize: 13, color: INK,
+    border: { type: "solid", color: GRID, pt: 0.75 }, fill: { color: WHITE }, rowH: 0.48, valign: "middle" });
+  s.addText("Same roads, radio, attackers and detector for all three. ECDSA is ~0.7 ms faster and its BSMs are smaller; the central authority pays a 20 ms backbone round trip on every request. Detection and revocation numbers are equal by construction (same detector and ledger), so they are not a comparison point.",
+    { x: 0.6, y: 5.25, w: 12.1, h: 1.2, fontSize: 14, color: INK, isTextBox: true, margin: 0, valign: "top" });
+  caption(s, "Property rows are design properties, not measurements. Full IEEE 1609.2 SCMS also splits linkage across authorities, at the cost of more online infrastructure.");
+}
+
 // ------------------------------------------------------------------ 11 what changed
 {
   const s = pres.addSlide({ masterName: "CONTENT" });

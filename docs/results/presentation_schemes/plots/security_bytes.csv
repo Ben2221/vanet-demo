@@ -1,0 +1,10 @@
+series,vehicles,security_bytes_per_bsm,security_bytes_per_bsm_ci95
+experiments.baselines.central_auth,30.0,72.0,0.0
+experiments.baselines.central_auth,60.0,72.0,0.0
+experiments.baselines.central_auth,90.0,72.0,0.0
+experiments.baselines.ecdsa_pki,30.0,72.0,0.0
+experiments.baselines.ecdsa_pki,60.0,72.0,0.0
+experiments.baselines.ecdsa_pki,90.0,72.0,0.0
+real,30.0,144.4353025865573,0.047216717603055944
+real,60.0,144.51686971508124,0.11113645055147861
+real,90.0,144.64757632531837,0.09874231571114482

@@ -9,8 +9,67 @@ mean ± 95 % CI. Full tables and every figure are in each folder's `REPORT.md`.
 | [`compare_bsm_ticket/`](compare_bsm_ticket/REPORT.md) | `experiments/configs/compare_bsm_ticket.json` | Latency, delivery and channel load as traffic grows; full ticket vs. digest in BSMs |
 | [`presentation_attacks/`](presentation_attacks/REPORT.md) | `presentation_attacks.json` | Is every attack caught, how fast, with how many false alarms? |
 | [`presentation_report_k/`](presentation_report_k/REPORT.md) | `presentation_report_k.json` | How many RSUs should have to agree before a revocation? |
+| [`presentation_schemes/`](presentation_schemes/REPORT.md) | `presentation_schemes.json` | Ours vs. ECDSA pseudonym certificates vs. a central authority |
 
 Slides built from these numbers: [`../presentation/vanet_results.pptx`](../presentation/vanet_results.pptx).
+
+## What is real and what is simulated
+
+| Part | Real? | Notes |
+|---|---|---|
+| Cryptography | **Real** | Every proof, signature, Merkle check, AES-GCM and Shamir operation actually runs (libsecp256k1 via `coincurve`) on every message; nothing is faked. Processing delays are measured timings (`protocol/compute_times.json`). |
+| Protocol logic and messages | **Real** | The same `protocol/` classes the unit tests use; message sizes are the real encoded bytes. |
+| Road network and traffic | Simulated | SUMO on a synthetic 5×5 grid with random trips. A **real city map** works: `--osm <export>` (see the main README, "Scenario from a real map"). |
+| Radio | Simulated | The lite 802.11p model for these numbers; **ns-3** (`--backend ns3`) for the final ones. |
+| Ledger | Simulated | An in-memory copy of the chaincode rules with a fixed 500 ms commit. **Real Fabric**: `--ledger http://localhost:3000` (see `ledger/`). |
+| Attacks | Simulated | Injected falsified BSMs (VeReMi-style attack types). Ground truth is known, which is what lets us score detection. |
+| Detector evaluation on a dataset | Not yet | The VeReMi / NextGen loader exists (`detection/loaders.py`) but the dataset has not been run. |
+
+So the results are *real protocol and crypto, running in simulated traffic, radio and ledger*. That
+is normal for VANET papers. Say it on the slide, and move each simulated part to its real counterpart
+for the final report: OSM map, ns-3, Fabric gateway, VeReMi.
+
+## Where to see the outputs
+
+| What | Where |
+|---|---|
+| One readable page per experiment | `docs/results/<name>/REPORT.md` (renders on GitHub) |
+| Every figure (PNG + CSV of the plotted numbers) | `docs/results/<name>/plots/` |
+| Mean and 95 % CI per setting | `docs/results/<name>/aggregate.csv` (opens in Excel) |
+| One row per run | `experiments/results/<name>/runs.csv` (local, git-ignored) |
+| Every event of one run | `experiments/results/<name>/runs/<run>/metrics.csv`: time, node, event (AUTH_OK, HANDOVER_OK, DETECT_FLAG `pid:checks`, REPORT, REVOKED_VISIBLE, IDENTITY_REVEALED, …), bytes, latency, result |
+| Network summary of one run | `.../runs/<run>/summary.json` (PDR, delays per message type, channel load) |
+| Animation | add `--backend ns3 --netanim` and open `netanim.xml` in NetAnim |
+| Slides | `docs/presentation/vanet_results.pptx` |
+
+## Comparison with the baselines (`presentation_schemes`, 60 vehicles)
+
+| | **Ours** (ZKP + ledger) | ECDSA certificates | Central authority |
+|---|---|---|---|
+| Auth latency, median | 1.96 ms | 1.28 ms | 22.25 ms |
+| Handover latency, median | 1.59 ms | 1.22 ms | 22.20 ms |
+| Security bytes per BSM | 145 | 72 | 72 |
+| Channel busy at RSUs | 4.1 % | 3.3 % | 3.3 % |
+| BSM delivery ratio | 0.951 | 0.961 | 0.960 |
+| Handovers accepted before the ledger commit (PREAUTH) | 31 % | – | – |
+
+How to read it honestly:
+* **ECDSA is a little faster and lighter** (~0.7 ms, 73 fewer bytes per BSM). The central authority
+  pays a 20 ms backbone round trip on every request and is a single point of failure.
+* **What we buy with that:** the pseudonym issuer cannot link a car's pseudonyms (only a Merkle root is
+  published), no single party can unmask anyone (t-of-n escrow plus an on-ledger approval), and no
+  authority has to be online for each request.
+* **Detection and revocation rows are equal** for all three schemes, because they share the same detector
+  and ledger rules in the simulation. They are not a comparison point.
+* The baselines are models (`experiments/baselines/schemes.py`): they reuse the stand-in message flow and
+  change sizes, verification costs and round trips. The ECDSA BSM is modelled at 72 security bytes
+  (signature + certificate digest), which is on the small side for IEEE 1609.2.
+
+Run it yourself: `python experiments/run.py --config experiments/configs/presentation_schemes.json --jobs 4`
+(300 s and 50/100/150 vehicles: `compare_schemes.json`). Figures with all three schemes as separate lines
+are in `presentation_schemes/plots/`. `python experiments/op_counts.py` prints the operation-count and
+message-size table, plus the papers you list in `experiments/papers_review.csv`, which is how to compare
+with published schemes you cannot simulate.
 
 ## Headline numbers (60 vehicles, 10 % attackers)
 
@@ -74,7 +133,8 @@ pip install -r requirements.txt
 python experiments/run.py --config experiments/configs/compare_bsm_ticket.json --jobs 4
 python experiments/run.py --config experiments/configs/presentation_attacks.json --jobs 4
 python experiments/run.py --config experiments/configs/presentation_report_k.json --jobs 4
-python experiments/export_results.py compare_bsm_ticket presentation_attacks presentation_report_k
+python experiments/run.py --config experiments/configs/presentation_schemes.json --jobs 4
+python experiments/export_results.py compare_bsm_ticket presentation_attacks presentation_report_k presentation_schemes
 cd docs/presentation && npm install pptxgenjs && node build_deck.js
 ```
 

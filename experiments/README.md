@@ -25,7 +25,7 @@ output, cached so an interrupted sweep resumes), `runs.csv` (one row per run), `
 | `attacks.json` | each attack | time to report, revocation, false revocations |
 | `sweep_report_k.json` | ledger K = 1, 2, 3 | revocation speed vs. how many RSUs must agree |
 | `compare_bsm_ticket.json` | vehicles × full ticket / digest | BSM size, channel load (presentation) |
-| `presentation_attacks.json`, `presentation_report_k.json` | 120 s versions of the two above | the numbers in `docs/results/` |
+| `presentation_attacks.json`, `presentation_report_k.json`, `presentation_schemes.json` | 120 s versions of `attacks`, `sweep_report_k`, `compare_schemes` | the numbers in `docs/results/` |
 
 Every run also writes `REPORT.md` (headline table, which detector checks fired, figure list).
 `python experiments/export_results.py <name> ...` copies REPORT.md, aggregate.csv and plots to

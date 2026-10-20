@@ -104,7 +104,8 @@ def _ratios(by_event: dict[str, list[dict]], attackers: set[str]) -> dict:
     ok = sum(1 for r in by_event.get("AUTH_OK", []) if r["node"] not in attackers)
     out["auth_success_ratio"] = ok / reqs if reqs else None
     checks = [r["result"] for r in by_event.get("HANDOVER_CHECK", [])]
-    accepted = [c for c in checks if "handover_accepted" in c]
+    # real protocol: "<pid>:handover_accepted:<via>"; stand-in and baselines: "<pid>:ok"
+    accepted = [c for c in checks if "handover_accepted" in c or c.endswith(":ok")]
     out["handover_success_ratio"] = len(accepted) / len(checks) if checks else None
     out["handover_via_preauth"] = (sum(1 for c in accepted if c.endswith(":preauth")) / len(accepted)
                                    if accepted else None)

@@ -94,6 +94,6 @@ Things for Person 3 / Person 1 to look at (not changed by me):
   `python -m detection.loaders --inspect <file>` first; if it says a field is missing, add the real
   name to `ALIASES`. The per-attack numbers for the report must come from the real NextGen test split.
 * Seen in the stand-in protocol, not in the detector: in the lite scenario one vehicle sent BSMs
-  under five different pseudonyms in turn at 10 Hz. `sybil` flags it. Check how
-  pseudonyms are chosen in `network/protocols/stub_auth.py` (and make sure the real protocol never
-  does this).
+  under five different pseudonyms in turn at 10 Hz. `sybil` flags it. Cause: the stand-in
+  rotated its pseudonym right after the 3rd session, so a car ping-ponging between two RSUs cycled
+  pseudonyms. Fixed: it now rotates at the next full authentication, as the real protocol does.
