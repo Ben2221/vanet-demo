@@ -40,7 +40,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mobility import fcd_to_ns2, place_rsus
-from mobility.sumo_env import binary
+from mobility.sumo_env import LANECHANGE_ARGS, LANECHANGE_TAG, binary
 
 MOBILITY_DIR = Path(__file__).resolve().parent
 OUT_DIR = MOBILITY_DIR / "out"
@@ -96,7 +96,7 @@ def ensure_real_scenario(real: str, duration: float = 120.0, seed: int = 1, step
     """Build (or reuse) a scenario cut from a real city. Returns the dict of ensure_scenario."""
     preset, window, start = parse(real)
     name = real.split(":")[0]
-    d = OUT_DIR / f"{name}_{window}_d{int(duration)}_s{seed}_st{step:g}"
+    d = OUT_DIR / f"{name}_{window}_d{int(duration)}_s{seed}_st{step:g}{LANECHANGE_TAG}"
     meta_file = d / "scenario.json"
     if force and d.exists():
         shutil.rmtree(d)
@@ -113,7 +113,7 @@ def ensure_real_scenario(real: str, duration: float = 120.0, seed: int = 1, step
         common = [binary("sumo"), "-c", str(cfg), "--seed", str(seed), "--no-step-log", "true",
                   "--no-warnings", "true", "--verbose", "false",
                   "--summary-output", str(d / "summary.xml"), "--tripinfo-output", str(d / "tripinfo.xml"),
-                  "--log", str(d / "sumo.log")]
+                  "--log", str(d / "sumo.log"), *LANECHANGE_ARGS]
         # one run: warm-up (so the roads are full when the window starts), then the window;
         # FCD only from the window start and only inside the box. (Saving the state after a
         # 1 s-step warm-up would be faster, but LuST's traffic lights cannot be reloaded

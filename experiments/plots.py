@@ -25,6 +25,8 @@ LINE_FIGURES = [
     ("auth_latency", "auth_ms_mean", "authentication latency (ms)", "Authentication latency"),
     ("handover_latency", "handover_ms_mean", "handover latency (ms)", "Handover latency"),
     ("ticket_latency", "ticket_ms_mean", "ticket acquisition latency (ms)", "Getting a ticket (login or renewal)"),
+    ("ticket_latency_steady", "ticket_ms_steady_mean", "ticket acquisition latency (ms)",
+     "Getting a ticket after start-up (from 10 s)"),
     ("pdr", "pdr", "packet delivery ratio", "Packet delivery ratio"),
     ("channel_busy", "cbr_rsu_mean", "channel busy ratio at RSUs", "Channel load"),
     ("ledger_commit", "ledger_commit_ms_median", "Fabric commit time, median (ms)", "Ledger commit time"),

@@ -16,6 +16,7 @@ from pathlib import Path
 METRICS = [
     ("auth ms", "auth_ms_mean", "{:.2f}", "low"),
     ("ticket ms", "ticket_ms_mean", "{:.2f}", "low"),
+    ("ticket ms after 10 s", "ticket_ms_steady_mean", "{:.2f}", "low"),
     ("handover ms", "handover_ms_mean", "{:.2f}", "low"),
     ("handovers", "handover_n", "{:.0f}", "low"),
     ("BSM/veh/s", "bsm_per_vehicle_s", "{:.2f}", "low"),

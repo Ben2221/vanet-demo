@@ -28,6 +28,8 @@ FOCUS = {"v3-fast", "v3-private"}
 # (title, column, unit, better, note)
 METRICS = [
     ("Getting a ticket", "ticket_ms_mean", "ms", "low", "full login or renewal, mean"),
+    ("Getting a ticket after start-up", "ticket_ms_steady_mean", "ms", "low",
+     "the same from 10 s on, without the start-up burst"),
     ("Neighbour acceptance latency", "v2v_accept_ms_mean", "ms", "low", "BSM sent → accepted by a vehicle"),
     ("RSU acceptance latency", "rsu_accept_ms_mean", "ms", "low", "BSM sent → accepted by an RSU, incl. CPU queue"),
     ("Safety traffic", "safety_bytes_per_vehicle_s", "B/s", "low", "BSM + key bytes per vehicle-second"),
@@ -299,7 +301,8 @@ def latency_cdfs(sweep: str, key: str, setting: str, block: str) -> str:
 
 def lust_map() -> str:
     """Roads in the LuST box, RSUs with their 300 m range, 60 vehicle tracks at 08:00."""
-    d = ROOT / "mobility" / "out" / "lust_peak_d120_s1_st0.1"
+    from mobility.sumo_env import LANECHANGE_TAG
+    d = ROOT / "mobility" / "out" / f"lust_peak_d120_s1_st0.1{LANECHANGE_TAG}"
     net = ROOT / "mobility" / "real" / "LuSTScenario" / "scenario" / "lust.net.xml"
     if not (d / "scenario.json").exists() or not net.exists():
         return '<p class="nodata">LuST scenario not built.</p>'

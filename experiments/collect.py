@@ -23,6 +23,7 @@ from collections import defaultdict
 from pathlib import Path
 
 PLAIN_BSM_BYTES = 45          # network/bsm.py _PLAIN struct: what a BSM costs without security
+STEADY_FROM = 10.0            # s; ticket_ms_steady_* leaves out the start-up burst
 
 
 def _pct(values: list[float], p: float) -> float | None:
@@ -70,6 +71,12 @@ def collect_run(run_dir: str | Path) -> dict:
     out["renew_n"] = len(by_event.get("RENEW_OK", []))
     out["ticket_ms_mean"] = sum(tickets) / len(tickets) if tickets else None
     out["ticket_ms_p95"] = _pct(tickets, 0.95)
+    # the same after start-up: a real-map cut starts with hundreds of vehicles already on the
+    # road, all asking for a ticket in the first seconds, which no real deployment sees
+    steady = [v for ev in ("AUTH_OK", "RENEW_OK") for r in by_event.get(ev, [])
+              if float(r["sim_time"]) >= STEADY_FROM and (v := _num(r["latency_ms"])) is not None]
+    out["ticket_ms_steady_mean"] = sum(steady) / len(steady) if steady else None
+    out["ticket_ms_steady_p95"] = _pct(steady, 0.95)
     out["handover_fallbacks"] = len(by_event.get("HANDOVER_FALLBACK", []))
     out["handovers_per_auth"] = out["handover_n"] / out["auth_n"] if out["auth_n"] else None
     out["auth_rejected"] = len(by_event.get("AUTH_REJECT", [])) + len(by_event.get("AUTH_REJECTED", []))
