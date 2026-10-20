@@ -132,6 +132,15 @@ def test_pseudonym_change_is_not_sybil():
     assert not any(seen)
 
 
+def test_own_pseudonym_change_is_not_an_overlap():
+    # the old and the new pseudonym of one vehicle are at the same place for an instant
+    det.reset()
+    det.check(msg(pid="old", t=1.0, x=100.0, sender=5), [])
+    assert det.check(msg(pid="new", t=1.1, x=100.1, sender=5), [])[1]["overlap"] == 0
+    # a different radio claiming the same spot is still an overlap
+    assert det.check(msg(pid="ghost", t=1.15, x=100.1, sender=9), [])[1]["overlap"] == 1
+
+
 def test_gap_in_reception_is_not_a_jump():
     """The vehicle left the range for 10 s and came back somewhere else."""
     h = honest_history()

@@ -14,7 +14,7 @@ from typing import Callable, Any
 from .crypto import verify_merkle, verify, schnorr_sign, schnorr_verify, SchnorrProof
 from .messages import Message, make_message
 from .registration import pseudonym_leaf
-from .vehicle import auth_context, canonical_json
+from .vehicle import auth_context, canonical_json, ticket_ref
 
 class RSU:
     def __init__(self, rsu_id: str, ledger: Any, private_key: int, public_key: bytes,
@@ -45,6 +45,8 @@ class RSU:
         self.preauth_cache: dict[str, dict[str, Any]] = {}
         # Ticket signatures already verified (a ticket is repeated in every BSM)
         self._good_tickets: dict[str, float] = {}
+        # Verified ticket payloads by digest, for BSMs that carry only ticket_ref
+        self._ticket_by_ref: dict[str, dict] = {}
 
         # Misbehaviour detector hook: check(bsm, history) -> (flagged, features)
         self.detector = detector
@@ -135,6 +137,7 @@ class RSU:
         payload = {"pid": pid, "pk": pub.hex(), "service": service, "class": vclass,
                    "issuer": self.rsu_id, "issued_at": now, "expiry": expiry}
         ticket = {"payload": payload, "signature": schnorr_sign(self.private_key, canonical_json(payload))}
+        self._ticket_by_ref[ticket_ref(ticket)] = payload
         self.ledger.record_auth(pid, service, vclass, expiry)
         return {"ok": True, "ticket": ticket, "reason": "authenticated", "pid": pid}
 
@@ -153,7 +156,9 @@ class RSU:
             return None
         if len(self._good_tickets) > 5000:
             self._good_tickets.clear()
+            self._ticket_by_ref.clear()
         self._good_tickets[key] = canonical_json(payload)
+        self._ticket_by_ref[ticket_ref(ticket)] = payload
         return payload
 
     # ------------------------------------------------------------ handover
@@ -265,7 +270,13 @@ class RSU:
             if not isinstance(payload, dict):
                 return {"ok": False, "reason": "malformed_bsm"}
             pid = str(payload.get("pid", ""))
-            ticket_payload = self._ticket_ok(payload.get("ticket"))
+            if "ticket_ref" in payload and "ticket" not in payload:
+                # digest of a ticket this RSU verified before (in a BSM, AUTH or PREAUTH)
+                ticket_payload = self._ticket_by_ref.get(str(payload["ticket_ref"]))
+                if ticket_payload is None:
+                    return {"ok": False, "reason": "unknown_ticket_ref", "pid": pid}
+            else:
+                ticket_payload = self._ticket_ok(payload.get("ticket"))
             if ticket_payload is None:
                 return {"ok": False, "reason": "invalid_ticket_signature", "pid": pid}
             if pid != str(ticket_payload.get("pid", "")):

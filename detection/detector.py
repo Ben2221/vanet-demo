@@ -88,22 +88,27 @@ class _Context:
     CELL = 5.0
 
     def __init__(self) -> None:
-        self.grid: dict[tuple[int, int], dict[str, tuple[float, float, float]]] = defaultdict(dict)
+        self.grid: dict[tuple[int, int], dict[str, tuple[float, float, float, object]]] = defaultdict(dict)
         self.cell_of: dict[str, tuple[int, int]] = {}
         self.sender_recent: dict[object, deque] = defaultdict(lambda: deque(maxlen=14))
 
-    def overlap(self, pid: str, t: float, x: float, y: float) -> bool:
+    def overlap(self, pid: str, t: float, x: float, y: float, sender=None) -> bool:
+        """Two pseudonyms at the same place at the same time. A pseudonym from the same
+        sender is that vehicle's own pseudonym change, not a second vehicle (a sender that
+        goes back and forth between pseudonyms is caught by ``sybil``)."""
         cx, cy = int(x // self.CELL), int(y // self.CELL)
         hit = False
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
-                for other, (ot, ox, oy) in self.grid.get((cx + dx, cy + dy), {}).items():
+                for other, (ot, ox, oy, osender) in self.grid.get((cx + dx, cy + dy), {}).items():
+                    if sender is not None and osender == sender:
+                        continue
                     if other != pid and abs(t - ot) < OVERLAP_DT and math.hypot(x - ox, y - oy) < OVERLAP_DIST:
                         hit = True
         old = self.cell_of.get(pid)
         if old is not None and old != (cx, cy):
             self.grid[old].pop(pid, None)
-        self.grid[(cx, cy)][pid] = (t, x, y)
+        self.grid[(cx, cy)][pid] = (t, x, y, sender)
         self.cell_of[pid] = (cx, cy)
         return hit
 
@@ -256,7 +261,7 @@ def rule_features(bsm: dict, history: list[dict]) -> dict:
     elif has_rsu and d_rsu < APPEAR_RADIUS:
         f["sudden_appear"] = 1
 
-    if ctx.overlap(bsm["pid"], t, x, y):
+    if ctx.overlap(bsm["pid"], t, x, y, bsm.get("sender")):
         f["overlap"] = 1
     if ctx.sybil(bsm.get("sender"), bsm["pid"]):
         f["sybil"] = 1

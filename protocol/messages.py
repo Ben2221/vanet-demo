@@ -21,6 +21,9 @@ Typical sizes in bytes (UDP payload in ns-3), 500 pseudonyms per epoch
 - HANDOVER_REQ: ~290 (ticket, target RSU, beacon nonce, timestamp, pseudonym signature)
 - PREAUTH:      ~280 (ticket, source/target RSU, timestamp, RSU signature)
 - BSM:          ~330 (seq, t, x, y, speed, heading, ticket, pseudonym signature)
+                ~180 when it carries the 8-byte ticket digest instead of the ticket
+                (Vehicle(full_ticket_every=N): full ticket in every N-th BSM, like the
+                IEEE 1609.2 certificate digest)
 """
 from __future__ import annotations
 import re
@@ -45,6 +48,7 @@ INTERNED = [
     "seq", "t", "x", "y", "speed", "heading", "handover", "authenticated", "handover_accepted",
     "revoked", "policy_denied", "not_registered", "invalid_proof", "stale_request",
     "invalid_or_replayed_nonce", "unknown_or_expired_epoch", "missing_shared_authorization",
+    "ticket_ref",
 ]
 _INTERN_INDEX = {s: i for i, s in enumerate(INTERNED)}
 _HEX = re.compile(r"^(?:[0-9a-f]{2})+$")

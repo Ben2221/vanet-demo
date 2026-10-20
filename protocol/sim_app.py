@@ -46,6 +46,10 @@ LOST_RSU_AFTER = 0.35        # no beacon from the current RSU for this long -> h
 
 __all__ = ["setup", "create_vehicle", "create_rsu", "message_type"]
 
+# detector checks named in DETECT_FLAG rows (detection.detector HARD + WEAK)
+_CHECKS = {"range", "speed_range", "pos_jump", "speed_cons", "pos_speed", "heading",
+           "msg_rate", "replay", "sybil", "sudden_appear", "overlap"}
+
 
 def _fields(data: bytes) -> dict | None:
     try:
@@ -218,6 +222,8 @@ class RsuApp:
     def _bsm(self, node, data: bytes, sim_time: float, sender: int) -> None:
         res = self.rsu.verify_bsm(data, rx_time=sim_time, rsu_pos=node.position(), sender=sender)
         pid = res.get("pid", "")
+        if not res["ok"] and res["reason"] == "unknown_ticket_ref":
+            return                      # not seen this ticket yet: the full one comes within a second
         if not res["ok"]:
             if (pid, res["reason"]) not in self.reject_logged:
                 self.reject_logged.add((pid, res["reason"]))
@@ -225,7 +231,9 @@ class RsuApp:
             return
         if res["flagged"] and pid not in self.flag_logged:
             self.flag_logged.add(pid)
-            node.log("DETECT_FLAG", len(data), None, pid)
+            # which checks fired: explains every flag (and every false flag) in the results
+            fired = [k for k, v in (res.get("features") or {}).items() if k in _CHECKS and v]
+            node.log("DETECT_FLAG", len(data), None, f"{pid}:{'+'.join(fired)}" if fired else pid)
         if res["reported"]:
             node.log("REPORT", 0, None, pid)
 
@@ -235,7 +243,9 @@ class VehicleApp:
     def __init__(self, node, env) -> None:
         self.vehicle = Vehicle(create_pseudonyms(PSEUDONYMS_PER_VEHICLE, EPOCH, CLASS), CLASS,
                                trusted_rsu_keys=env.shared.setdefault("rsu_keys", {}),
-                               pseudonym_switch_after=SESSIONS_PER_PSEUDONYM, clock=node.now)
+                               pseudonym_switch_after=SESSIONS_PER_PSEUDONYM,
+                               full_ticket_every=int(env.config.get("full_ticket_every") or 1),
+                               clock=node.now)
         self.pending: tuple[str, float, str] | None = None   # rsu, t_sent, "auth" / "handover"
         self.heard: dict[str, float] = {}
         self.retry_after = 0.0

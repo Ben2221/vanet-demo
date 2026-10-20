@@ -1,0 +1,8 @@
+{
+  "name": "compare_bsm_ticket",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 120, "backend": "auto", "ledger": "mock", "protocol": "real",
+            "attacker_ratio": 0.1, "attack": "random_pos", "attack_start": 20},
+  "grid": {"vehicles": [30, 60, 90]},
+  "variants": [{"full_ticket_every": 1}, {"full_ticket_every": 10}]
+}

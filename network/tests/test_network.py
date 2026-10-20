@@ -56,6 +56,16 @@ def test_ns2_parser(tmp_path):
     assert tr.position(6.0)[0] == -1000.0
 
 
+def test_position_table_does_not_slide_into_the_parking_spot(tmp_path):
+    # the vehicle leaves at t = 5 (jump to -1000); just before, the radio must still see it on the road
+    f = tmp_path / "t.ns2"
+    f.write_text('$node_(0) set X_ 10.0\n$node_(0) set Y_ 0.0\n'
+                 '$ns_ at 5.00 "$node_(0) set X_ -1000.00"\n')
+    table = ns2_mobility.PositionTable(ns2_mobility.load(f), 1, end=6.0)
+    assert table.at(4.95)[0] == pytest.approx((10.0, 0.0))
+    assert table.at(5.5)[0][0] == -1000.0
+
+
 # ----------------------------------------------------------------- ledger
 def test_caller_rules():
     led = InMemoryLedger()

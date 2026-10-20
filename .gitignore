@@ -12,3 +12,7 @@ experiments/results/
 *.xml.gz
 netanim.xml
 flowmon.xml
+
+# slide deck tooling
+docs/presentation/node_modules/
+docs/presentation/package*.json

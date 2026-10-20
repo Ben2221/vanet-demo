@@ -5,7 +5,7 @@ simulated clock (``node.now``), so freshness windows and ticket expiry follow
 simulated time.
 """
 from __future__ import annotations
-import json, time
+import hashlib, json, time
 from typing import Callable, Any
 from .crypto import prove, schnorr_sign, schnorr_verify, CommitmentPool
 from .messages import make_message, Message
@@ -21,10 +21,16 @@ def auth_context(rsu_id: str, nonce: str, timestamp: float, service: str,
               vehicle_class.encode()]
     return b"".join(len(item).to_bytes(4, "big") + item for item in fields)
 
+def ticket_ref(ticket: dict) -> str:
+    """8-byte digest of a signed ticket (like IEEE 1609.2 HashedId8): a BSM may carry this
+    instead of the ticket once the RSUs around have seen the full ticket."""
+    return hashlib.sha256(canonical_json(ticket)).hexdigest()[:16]
+
 class Vehicle:
     def __init__(self, pseudonyms: list[Pseudonym], vehicle_class: str = "car",
                  trusted_rsu_keys: dict[str, bytes] | None = None, freshness_seconds: float = 5.0,
                  pseudonym_switch_after: int = 3,
+                 full_ticket_every: int = 1,
                  send_fn: Callable[[Any, Any, bytes], None] | None = None,
                  schedule_fn: Callable[[float, Callable], None] | None = None,
                  clock: Callable[[], float] = time.time):
@@ -40,6 +46,12 @@ class Vehicle:
         if pseudonym_switch_after < 1:
             raise ValueError("pseudonym_switch_after must be positive")
         self.pseudonym_switch_after = pseudonym_switch_after
+        if full_ticket_every < 1:
+            raise ValueError("full_ticket_every must be positive")
+        # 1: every BSM carries the ticket; N: every N-th BSM and the first after a new ticket or
+        # handover, the others only its digest (ticket_ref)
+        self.full_ticket_every = full_ticket_every
+        self._bsms_since_full = 0
         self.clock = clock
         # Pool of precomputed commitments (g^r computed while idle)
         self.commitment_pool = CommitmentPool(initial_size=5)
@@ -58,6 +70,7 @@ class Vehicle:
         self.sessions_on_current = 0
         self.ticket = None
         self.current_rsu_id = None
+        self._bsms_since_full = 0
         return self.current
 
     def ticket_valid(self, margin: float = 0.0) -> bool:
@@ -112,6 +125,7 @@ class Vehicle:
             if not schnorr_verify(rsu_public_key, canonical_json(payload), signature):
                 return False
             self.ticket = ticket
+            self._bsms_since_full = 0
             self.sessions_on_current += 1
             self.current_rsu_id = str(payload.get("issuer"))
             return True
@@ -121,14 +135,19 @@ class Vehicle:
     def handover_accepted(self, rsu_id: str) -> None:
         self.sessions_on_current += 1
         self.current_rsu_id = rsu_id
+        self._bsms_since_full = 0       # the new RSU's neighbours may not know the ticket yet
 
     def make_bsm(self, **safety_fields) -> bytes:
-        """Create a signed BSM carrying the current pseudonym and current ticket.
-        The verifying key is the one in the ticket, so no separate key is sent."""
+        """Create a signed BSM carrying the current pseudonym and current ticket (or its digest,
+        see full_ticket_every). The verifying key is the one in the ticket, so no separate key is sent."""
         p = self.current
         if self.ticket is None:
             raise RuntimeError("cannot send authenticated BSM without a ticket")
-        payload = {"pid": p.pid, "fields": safety_fields, "ticket": self.ticket}
+        if self._bsms_since_full % self.full_ticket_every == 0:
+            payload = {"pid": p.pid, "fields": safety_fields, "ticket": self.ticket}
+        else:
+            payload = {"pid": p.pid, "fields": safety_fields, "ticket_ref": ticket_ref(self.ticket)}
+        self._bsms_since_full += 1
         signature = schnorr_sign(p.secret, canonical_json(payload))
         return make_message("BSM", payload=payload, signature=signature).to_bytes()
 

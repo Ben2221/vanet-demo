@@ -297,6 +297,27 @@ def test_signed_bsm_and_tampering():
     assert not rsu2.verify_bsm(forged)["ok"]
 
 
+def test_bsm_with_ticket_digest():
+    """full_ticket_every=N: the full ticket in every N-th BSM, an 8-byte digest otherwise.
+    An RSU accepts a digest only for a ticket it has verified; the digest is signed like the rest."""
+    ledger, ps, rsu1, rsu2, _, pk1, pk2 = setup_world(count=1)
+    vehicle = Vehicle(ps, trusted_rsu_keys={"RSU-1": pk1, "RSU-2": pk2}, full_ticket_every=3)
+    _, _, result = auth(None, None, rsu1, vehicle)
+    assert vehicle.accept_ticket(result["ticket"], pk1)
+    bsms = [vehicle.make_bsm(seq=i, t=float(i), x=1.0, y=2.0, speed=3.0, heading=0.0) for i in range(4)]
+    full, ref = Message.from_bytes(bsms[0]).fields["payload"], Message.from_bytes(bsms[1]).fields["payload"]
+    assert "ticket" in full and "ticket_ref" in ref and "ticket" not in ref
+    assert len(bsms[1]) < len(bsms[0]) - 100
+    assert "ticket" in Message.from_bytes(bsms[3]).fields["payload"]          # every 3rd again
+    assert rsu1.verify_bsm(bsms[1])["ok"]                       # the issuer knows its own ticket
+    assert rsu2.verify_bsm(bsms[1])["reason"] == "unknown_ticket_ref"
+    assert rsu2.verify_bsm(bsms[0])["ok"] and rsu2.verify_bsm(bsms[1])["ok"]
+    forged = tamper(bsms[2], lambda f: f["payload"].update(ticket_ref="00" * 8))
+    assert not rsu1.verify_bsm(forged)["ok"]
+    stolen = tamper(bsms[2], lambda f: f["payload"].update(pid="someone-else"))
+    assert not rsu1.verify_bsm(stolen)["ok"]
+
+
 def test_invalid_message_type_rejected():
     try:
         Message.from_bytes(bytes([42, 1, 8, 0]))

@@ -144,6 +144,9 @@ def load(path: str | Path) -> dict[int, Trajectory]:
     return trajs
 
 
+MAX_SPEED = 100.0      # m/s; a faster move between two grid samples is a jump, not driving
+
+
 class PositionTable:
     """All node positions sampled on a fixed grid, for fast vectorised lookups."""
 
@@ -167,4 +170,9 @@ class PositionTable:
         if i >= len(self.pos) - 1:
             return self.pos[-1]
         a = f - i
-        return self.pos[i] + a * (self.pos[i + 1] - self.pos[i])
+        step = self.pos[i + 1] - self.pos[i]
+        # a jump (entering from / leaving to the parking spot) happens at a knot, i.e. at the
+        # end of this grid step: hold the old position instead of sliding across the map
+        jump = np.hypot(step[:, 0], step[:, 1]) > MAX_SPEED * self.dt
+        step[jump] = 0.0
+        return self.pos[i] + a * step

@@ -66,7 +66,13 @@ def collect_run(run_dir: str | Path) -> dict:
         out[f"{name}_ms_median"] = _pct(v, 0.5)
         out[f"{name}_ms_p95"] = _pct(v, 0.95)
     out["handover_fallbacks"] = len(by_event.get("HANDOVER_FALLBACK", []))
-    out["auth_rejected"] = len(by_event.get("AUTH_REJECT", [])) + len(by_event.get("AUTH_REJECTED", []))
+    # rejections are counted once, at the RSU (the vehicle's AUTH_REJECTED row is the same event);
+    # rejecting a revoked pseudonym is the protocol working, any other reason is a failure
+    rejects = [r["result"].rsplit(":", 1)[-1] for r in by_event.get("AUTH_REJECT", [])]
+    out["auth_rejected"] = len(rejects)
+    out["auth_rejected_revoked"] = sum(1 for x in rejects if x == "revoked")
+    out["auth_rejected_other"] = len(rejects) - out["auth_rejected_revoked"]
+    out.update(_ratios(by_event, _attacker_names(d)))
     out["pdr"] = summary.get("broadcast_pdr")
     out["unicast_pdr"] = summary.get("unicast_pdr")
     out["cbr_rsu_mean"] = summary.get("cbr_rsu_mean")
@@ -80,6 +86,31 @@ def collect_run(run_dir: str | Path) -> dict:
         out["security_bytes_per_bsm"] = mean_bsm - PLAIN_BSM_BYTES
     out["wall_time_s"] = summary.get("wall_time_s")
     out.update(_detection(d, by_event))
+    return out
+
+
+def _attacker_names(d: Path) -> set[str]:
+    if not (d / "attackers.csv").exists():
+        return set()
+    with (d / "attackers.csv").open(newline="") as f:
+        return {r["name"] for r in csv.DictReader(f)}
+
+
+def _ratios(by_event: dict[str, list[dict]], attackers: set[str]) -> dict:
+    """Success ratios of honest vehicles (an attacker's rejected requests are revocation working),
+    and how handovers were authorised (ledger record or backbone PREAUTH)."""
+    out: dict = {}
+    reqs = sum(1 for r in by_event.get("TX_AUTH_REQ", []) if r["node"] not in attackers)
+    ok = sum(1 for r in by_event.get("AUTH_OK", []) if r["node"] not in attackers)
+    out["auth_success_ratio"] = ok / reqs if reqs else None
+    checks = [r["result"] for r in by_event.get("HANDOVER_CHECK", [])]
+    accepted = [c for c in checks if "handover_accepted" in c]
+    out["handover_success_ratio"] = len(accepted) / len(checks) if checks else None
+    out["handover_via_preauth"] = (sum(1 for c in accepted if c.endswith(":preauth")) / len(accepted)
+                                   if accepted else None)
+    vehicles = {r["node"] for r in by_event.get("ENTER", [])}
+    changes = len(by_event.get("PSEUDONYM_CHANGE", []))
+    out["pseudonym_changes_per_vehicle"] = changes / len(vehicles) if vehicles else None
     return out
 
 
@@ -126,9 +157,65 @@ def _detection(d: Path, by_event: dict[str, list[dict]]) -> dict:
     out["honest_reported"] = len(wrong) if owner else None
     delays = [revoked_at[p] - reports[p] for p in revoked_at]
     out["report_to_revocation_s_mean"] = sum(delays) / len(delays) if delays else None
+    # The clock for "time to first report" starts when the attacker can first send an authenticated
+    # lying BSM: the attack start, or its first ticket if it entered the road / got coverage later.
+    # (Counting from the attack start alone charges the detector for time the car was not on the road.)
     start = {v: float(a["start"]) for v, a in attackers.items()}
-    first = [reports[p] - start[v] for p, v in resolved.items() if v in start and reports[p] >= start[v]]
+    first_ok: dict[str, list[float]] = defaultdict(list)
+    for r in by_event.get("AUTH_OK", []):
+        first_ok[r["node"]].append(float(r["sim_time"]))
+    ref = {}
+    for v, t0 in start.items():
+        later = [t for t in first_ok.get(v, []) if t >= t0]
+        before = [t for t in first_ok.get(v, []) if t < t0]
+        ref[v] = t0 if before or not later else min(later)
+    first_by_vehicle: dict[str, float] = {}
+    for p, v in resolved.items():
+        if v in ref and reports[p] >= ref[v]:
+            first_by_vehicle[v] = min(first_by_vehicle.get(v, float("inf")), reports[p] - ref[v])
+    first = list(first_by_vehicle.values())
     out["first_report_delay_s_mean"] = sum(first) / len(first) if first else None
+    out["first_report_delay_s_median"] = _pct(first, 0.5)
     out["rsu_reports"] = len(by_event.get("REPORT", []))
     out["detect_flags"] = len(by_event.get("DETECT_FLAG", []))
+
+    # revocation and exclusion per attacker (a pseudonym revoked; the identity revealed and every
+    # pseudonym of the vehicle revoked)
+    revoked_any = {owner[p] for r in by_event.get("REVOKED_VISIBLE", []) for p in [r["result"].strip()]
+                   if p in owner}
+    revealed = {}
+    for r in by_event.get("IDENTITY_REVEALED", []):
+        m = re.match(r"\s*([0-9a-f]+)\s*->\s*(\S+)", r["result"])
+        if m:
+            revealed.setdefault(m.group(2), float(r["sim_time"]))
+    out["attackers_revoked"] = len(revoked_any & set(attackers)) if owner else None
+    out["revocation_rate"] = (len(revoked_any & set(attackers)) / len(attackers)
+                              if attackers and owner else None)
+    out["attackers_identity_revealed"] = len(set(revealed) & set(attackers))
+    out["honest_revoked"] = len(revoked_any - set(attackers)) if owner else None
+    excl = [revealed[v] - ref[v] for v in revealed if v in ref and revealed[v] >= ref[v]]
+    out["attack_to_exclusion_s_mean"] = sum(excl) / len(excl) if excl else None
+
+    # false flags: honest vehicles whose BSM was flagged at least once (a flag alone revokes nothing;
+    # K flags out of W at two RSUs do). DETECT_FLAG result is "<pid>" or "<pid>:<check>+<check>".
+    flagged = {owner[pid] for r in by_event.get("DETECT_FLAG", [])
+               for pid in [r["result"].split(":", 1)[0].strip()] if pid in owner}
+    out["honest_flagged"] = len(flagged - set(attackers)) if owner else None
     return out
+
+
+def flag_checks(run_dir: str | Path) -> dict[str, dict[str, int]]:
+    """Which detector checks fired, split by attacker / honest vehicle: {"attacker": {check: n}, ...}."""
+    d = Path(run_dir)
+    by_event: dict[str, list[dict]] = defaultdict(list)
+    for r in _read_metrics(d / "metrics.csv"):
+        by_event[r["event"]].append(r)
+    owner = _owner_map(by_event)
+    attackers = _attacker_names(d)
+    out: dict[str, dict[str, int]] = {"attacker": defaultdict(int), "honest": defaultdict(int)}
+    for r in by_event.get("DETECT_FLAG", []):
+        pid, _, checks = r["result"].partition(":")
+        who = "attacker" if owner.get(pid.strip()) in attackers else "honest"
+        for c in filter(None, checks.split("+")):
+            out[who][c] += 1
+    return {k: dict(v) for k, v in out.items()}

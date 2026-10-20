@@ -29,12 +29,20 @@ LINE_FIGURES = [
     ("ledger_commit", "ledger_commit_ms_median", "Fabric commit time, median (ms)", "Ledger commit time"),
     ("ledger_commit_p95", "ledger_commit_ms_p95", "Fabric commit time, p95 (ms)", "Ledger commit time (95th percentile)"),
     ("report_to_revocation", "report_to_revocation_s_mean", "report to revocation (s)", "Time from report to revocation"),
-    ("first_report_delay", "first_report_delay_s_mean", "attack start to first report (s)", "Time to first report"),
+    ("first_report_delay", "first_report_delay_s_mean", "first lying BSM to first report (s)", "Time to first report"),
     ("honest_wrongly_revoked", "honest_reported", "honest vehicles reported", "Honest vehicles wrongly reported"),
+    ("honest_flagged", "honest_flagged", "honest vehicles flagged at least once", "False flags (before K-of-W)"),
     ("detection_rate", "detection_rate", "attackers reported", "Attackers caught"),
+    ("revocation_rate", "revocation_rate", "attackers revoked on the ledger", "Attackers revoked"),
+    ("attack_to_exclusion", "attack_to_exclusion_s_mean", "first lying BSM to identity reveal (s)",
+     "Time to exclude an attacker (all pseudonyms)"),
+    ("auth_success", "auth_success_ratio", "AUTH_OK / AUTH_REQ", "Authentication success ratio"),
+    ("handover_success", "handover_success_ratio", "accepted / requested", "Handover success ratio"),
+    ("handover_via_preauth", "handover_via_preauth", "share of handovers via PREAUTH",
+     "Handovers authorised by backbone pre-authorisation"),
     ("security_bytes", "security_bytes_per_bsm", "bytes added per BSM", "Security overhead per safety message"),
 ]
-X_PREFERENCE = ["vehicles", "attacker_ratio", "rsu_spacing", "beacon_rate"]
+X_PREFERENCE = ["vehicles", "attacker_ratio", "rsu_spacing", "beacon_rate", "report_k", "attack"]
 
 
 def _read(path: Path) -> list[dict]:
@@ -68,12 +76,17 @@ def _line(rows, x, y, ylabel, title, out: Path, series_key: str | None) -> bool:
         return False
     fig, ax = plt.subplots(figsize=(6.2, 4.0))
     table = []
-    for name, rs in sorted(groups.items()):
-        rs = sorted(rs, key=lambda r: r[x])
+    categorical = any(isinstance(r.get(x), str) for rs in groups.values() for r in rs)
+    for k, (name, rs) in enumerate(sorted(groups.items())):
+        rs = sorted(rs, key=lambda r: str(r[x]) if categorical else r[x])
         xs, ys, es = [r[x] for r in rs], [r[y] for r in rs], [r.get(ci) or 0.0 for r in rs]
         label = name.split(".")[-1] if name else None
-        if len(xs) > 1:
-            ax.errorbar(xs, ys, yerr=es, marker="o", capsize=3, label=label)
+        if categorical:         # e.g. one bar per attack
+            width = 0.8 / len(groups)
+            pos = [i + (k - (len(groups) - 1) / 2) * width for i in range(len(xs))]
+            ax.bar(pos, ys, width, yerr=es, capsize=3, label=label)
+            ax.set_xticks(range(len(xs)))
+            ax.set_xticklabels(xs, rotation=20, ha="right")
         else:
             ax.errorbar(xs, ys, yerr=es, marker="o", capsize=3, label=label)
         table += [{"series": name, x: a, y: b, ci: c} for a, b, c in zip(xs, ys, es)]
@@ -133,7 +146,9 @@ def make_all(results_dir: str | Path, cfg: dict | None = None, detection_json: s
         if cfg is None and (results_dir / "config.json").exists():
             cfg = json.loads((results_dir / "config.json").read_text())
         x = _x_axis(rows, cfg)
-        series = "protocol" if len({r.get("protocol") for r in rows}) > 1 else None
+        # one line per variant: the first variant key that takes more than one value
+        vkeys = [k for v in (cfg or {}).get("variants", []) for k in v] + ["protocol"]
+        series = next((k for k in vkeys if len({r.get(k) for r in rows}) > 1), None)
         if x is None:
             print("plots: no swept parameter in the config, line figures skipped")
         else:

@@ -23,11 +23,19 @@ output, cached so an interrupted sweep resumes), `runs.csv` (one row per run), `
 | `sweep_beacon_rate.json` | beacon rate 2, 5, 10 Hz | |
 | `compare_schemes.json` | vehicles, 3 schemes | ours vs ECDSA certificates vs central authority |
 | `attacks.json` | each attack | time to report, revocation, false revocations |
+| `sweep_report_k.json` | ledger K = 1, 2, 3 | revocation speed vs. how many RSUs must agree |
+| `compare_bsm_ticket.json` | vehicles × full ticket / digest | BSM size, channel load (presentation) |
+| `presentation_attacks.json`, `presentation_report_k.json` | 120 s versions of the two above | the numbers in `docs/results/` |
+
+Every run also writes `REPORT.md` (headline table, which detector checks fired, figure list).
+`python experiments/export_results.py <name> ...` copies REPORT.md, aggregate.csv and plots to
+`docs/results/<name>/` (versioned) and updates `docs/results/results.json`, which
+`node docs/presentation/build_deck.js` turns into the slide deck.
 
 A config lists any `network/run_scenario.py` option (`_` for `-`). At least 3 seeds are
 needed; the runner warns otherwise. Change `backend` to `ns3` for the final numbers and
-`ledger` to the gateway URL for real Fabric. `--protocol real` needs the network hooks in Person 3's `protocol/` (see
-`detection/README.md`, item 5); the configs use `stub` until then.
+`ledger` to the gateway URL for real Fabric. All configs run the real protocol (`protocol: real`).
+Runs that share a SUMO scenario no longer race: `run.py` builds each scenario once before starting the parallel runs.
 
 ## Before the final sweep
 

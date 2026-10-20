@@ -5,7 +5,7 @@
             "compute_times": "experiments/compute_times_all.json"},
   "grid": {"vehicles": [50, 100, 150]},
   "variants": [
-    {"protocol": "stub"},
+    {"protocol": "real"},
     {"protocol": "experiments.baselines.ecdsa_pki"},
     {"protocol": "experiments.baselines.central_auth"}
   ]

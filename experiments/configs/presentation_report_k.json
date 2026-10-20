@@ -1,0 +1,7 @@
+{
+  "name": "presentation_report_k",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 120, "backend": "auto", "ledger": "mock", "protocol": "real", "vehicles": 60,
+            "attacker_ratio": 0.1, "attack": "const_pos", "attack_start": 20},
+  "grid": {"report_k": [1, 2, 3]}
+}

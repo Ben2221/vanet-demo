@@ -74,6 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="JSON {op: seconds} of processing delays (prove, verify, sign, ...); "
                         "default: experiments/compute_times_all.json or protocol/compute_times.json "
                         "if present, 'none' for zero delays")
+    g.add_argument("--full-ticket-every", type=int, default=10,
+                   help="real protocol: full ticket in every N-th BSM, an 8-byte digest in the others "
+                        "(default 10 = once a second at 10 Hz, like IEEE 1609.2 certificates; 1 = always)")
     g.add_argument("--attacker-ratio", type=float, default=0.0, help="fraction of vehicles that lie in BSMs")
     g.add_argument("--attack", default="const_pos",
                    help="const_pos, random_pos, const_speed, random_speed, sudden_stop, flood")

@@ -91,6 +91,26 @@ def execute(params: dict, out: Path, force: bool) -> tuple[Path, str | None]:
     return out, None
 
 
+SCENARIO_KEYS = ("vehicles", "duration", "seed", "net", "osm", "rsu_spacing", "rsu_range")
+
+
+def prebuild(runs: list[dict]) -> None:
+    """Build every SUMO scenario once, before the parallel runs: runs that share a scenario
+    (same vehicles, duration, seed) would otherwise build it at the same time and break it."""
+    from mobility.build_scenario import ensure_scenario
+    defaults = {"vehicles": 100, "duration": 300.0, "seed": 1, "net": "grid", "osm": None,
+                "rsu_spacing": 450.0, "rsu_range": 300.0}
+    seen = set()
+    for p in runs:
+        key = tuple(p.get(k, defaults[k]) for k in SCENARIO_KEYS)
+        if key in seen:
+            continue
+        seen.add(key)
+        k = dict(zip(SCENARIO_KEYS, key))
+        ensure_scenario(int(k["vehicles"]), float(k["duration"]), int(k["seed"]), k["net"], k["osm"],
+                        float(k["rsu_spacing"]), float(k["rsu_range"]), quiet=True)
+
+
 def run_all(cfg: dict, jobs: int, force: bool, collect_only: bool) -> list[dict]:
     base = RESULTS / cfg["name"]
     runs = expand(cfg)
@@ -103,6 +123,7 @@ def run_all(cfg: dict, jobs: int, force: bool, collect_only: bool) -> list[dict]
     todo = [(p, base / "runs" / run_id(p)) for p in runs]
     failures = []
     if not collect_only:
+        prebuild([p for p, out in todo if force or not (out / "summary.json").exists()])
         with ThreadPoolExecutor(max_workers=jobs) as pool:
             for i, (out, err) in enumerate(pool.map(lambda po: execute(po[0], po[1], force), todo), 1):
                 print(f"[{i}/{len(todo)}] {out.name}" + (" FAILED" if err else ""), flush=True)
@@ -172,6 +193,8 @@ def main(argv=None) -> None:
     if not a.no_plots:
         from experiments import plots
         plots.make_all(RESULTS / cfg["name"], cfg)
+    from experiments.report import write_report
+    print(f"report -> {write_report(RESULTS / cfg['name'])}")
 
 
 if __name__ == "__main__":

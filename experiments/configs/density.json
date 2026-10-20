@@ -1,7 +1,7 @@
 {
   "name": "density",
   "seeds": [1, 2, 3],
-  "fixed": {"duration": 300, "backend": "auto", "ledger": "mock", "protocol": "stub",
+  "fixed": {"duration": 300, "backend": "auto", "ledger": "mock", "protocol": "real",
             "attack": "random_pos", "attack_start": 30, "compute_times": "experiments/compute_times_all.json"},
   "grid": {"vehicles": [50, 100, 150], "attacker_ratio": [0.0, 0.1, 0.2]}
 }

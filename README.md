@@ -5,6 +5,10 @@ authenticate anonymously to roadside units (RSUs) with zero-knowledge proofs;
 authorization, revocation and identity-reveal approvals live on Hyperledger
 Fabric.
 
+**New here? Read [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md)** (the whole mechanism, step by
+step, with the questions reviewers ask) and [`docs/results/README.md`](docs/results/README.md)
+(current results and how to present them).
+
 This repository contains the implementation and documentation for our Bachelor Thesis Project (BTP), focused on network simulation using NS-3. It also contains the Hyperledger Fabric ledger setup for the VANET demo, defined in `ledger/` and planned in `chain_structure.md`. For detailed ledger architecture, operation, validation, and AI handoff context, see [`ledger/IMPLEMENTATION_CONTEXT.md`](ledger/IMPLEMENTATION_CONTEXT.md).
 
 ## Setup
@@ -44,7 +48,8 @@ Main options (all have defaults; `--help` lists everything):
 | `--data-rate R` | 6 | Mb/s (802.11p, 10 MHz) |
 | `--beacon-rate HZ` | 10 | BSM rate |
 | `--congestion-control` | off | halve the beacon rate when the channel busy ratio > 0.6 |
-| `--protocol` | `stub` | `stub` (stand-in auth flow), `echo`, `real` (Person 3's `protocol/`) |
+| `--protocol` | `stub` | `stub` (stand-in auth flow), `echo`, `real` (Person 3's `protocol/`; all experiment configs use `real`) |
+| `--full-ticket-every N` | 10 | real protocol: full ticket in every N-th BSM, 8-byte digest otherwise (1 = always full) |
 | `--ledger` | `mock` | `mock`, or the gateway URL for real Fabric, e.g. `http://localhost:3000` |
 | `--attacker-ratio F`, `--attack A` | 0, `const_pos` | vehicles that lie in their BSMs |
 | `--backend` | `auto` | `ns3`, `lite`, or `auto` (ns-3 if installed) |

@@ -65,6 +65,22 @@ def test_collect_run(tmp_path):
     assert r["pids_unresolved"] == 0
 
 
+def test_first_report_counts_from_the_attackers_first_ticket(tmp_path):
+    # veh3 starts lying at 30 s but only gets on the road (first ticket) at 38 s: reported at 40 s = 2 s
+    _fake_run(tmp_path / "r")
+    with (tmp_path / "r" / "metrics.csv").open("a", newline="") as f:
+        csv.writer(f).writerows([[38.0, "veh3", "AUTH_OK", 100, 2.0, "rsu0"],
+                                 [40.5, "rsu0", "DETECT_FLAG", 300, "", "aa:pos_speed+range"],
+                                 [42.0, "rsu0", "AUTH_REJECT", 500, 1.0, "aa:revoked"],
+                                 [42.0, "veh3", "AUTH_REJECTED", 200, 1.0, "rsu0:revoked"]])
+    r = collect_run(tmp_path / "r")
+    assert r["first_report_delay_s_mean"] == pytest.approx(2.0)
+    assert r["auth_rejected"] == 1 and r["auth_rejected_revoked"] == 1 and r["auth_rejected_other"] == 0
+    assert r["attackers_revoked"] == 1 and r["honest_flagged"] == 0
+    from experiments.collect import flag_checks
+    assert flag_checks(tmp_path / "r")["attacker"] == {"pos_speed": 1, "range": 1}
+
+
 def test_collect_says_when_pseudonyms_cannot_be_resolved(tmp_path):
     _fake_run(tmp_path / "r", reported=("zz", "yy"))
     r = collect_run(tmp_path / "r")
@@ -86,6 +102,9 @@ def test_tables_and_plots(tmp_path, monkeypatch):
     assert float(agg[0]["auth_ms_mean_ci95"]) > 0
     made = plots.make_all(tmp_path / "t", cfg)
     assert (tmp_path / "t" / "plots" / "auth_latency.png").exists() and made
+    from experiments.report import write_report
+    text = write_report(tmp_path / "t").read_text()
+    assert "| auth latency, median (ms) |" in text and "vehicles=30" in text
 
 
 def test_baselines_expose_the_protocol_hooks():
