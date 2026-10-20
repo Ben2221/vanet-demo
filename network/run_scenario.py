@@ -234,6 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--quiet", action="store_true")
     g.add_argument("--live", action="store_true",
                    help="narrate the run in plain English while it runs (experiments/live.py)")
+    g.add_argument("--live-all", action="store_true",
+                   help="with --live: also every handover, renewal, pseudonym change and ledger write")
     g.add_argument("--live-pace", type=float, default=0.0,
                    help="with --live: simulated seconds per wall second (1 = real time, 0 = as fast as possible)")
     return ap
@@ -385,7 +387,7 @@ def main(argv: list[str] | None = None) -> dict:
     if a.live:
         from experiments.live import Narrator
         st = scenario.stats
-        narrator = Narrator(pace=a.live_pace, counters=lambda: {"BSMs sent": st.sent_by_type.get("BSM", 0),
+        narrator = Narrator(a.live_all, pace=a.live_pace, counters=lambda: {"BSMs sent": st.sent_by_type.get("BSM", 0),
                                               "BSM bytes": st.bytes_by_type.get("BSM", 0)})
         scenario.metrics.listeners.append(narrator.feed)
     try:

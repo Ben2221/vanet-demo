@@ -36,7 +36,7 @@ help:
 	@echo "make ledger-bench   real Fabric: commit latency of Raft vs BFT ordering (Docker, Fabric 3.1.5)"
 	@echo "make show           key numbers of every run under experiments/results/"
 	@echo "make demo           live side-by-side: Phase I vs v3-fast vs v3-private on ns-3 (~3 min)"
-	@echo "make live           narrate one ns-3 run in plain English as it runs (PROFILE=Phase-I|v3-fast|v3-private)"
+	@echo "make live           narrate one ns-3 run in plain English as it runs (PROFILE=..., ALL=1 for every handover)"
 	@echo "make replay         replay a finished run the same way (RUN=<run folder> SPEED=4)"
 	@echo "make mock           in-memory ledger REST server on PORT=$(PORT)"
 	@echo "make gateway        Fabric REST gateway on PORT=$(PORT) (needs make fabric-up)"
@@ -119,6 +119,7 @@ ATTACK_TYPE ?= random_pos  # const_pos, random_pos, const_speed, random_speed, s
 ATTACK_AT   ?= 20          # s when the attack starts
 MAP         ?= grid        # grid, or real Luxembourg traffic: lust:low, lust:mid, lust:peak
 PACE        ?= 0           # make live: simulated s per wall s (1 = real time, 0 = as fast as possible)
+ALL         ?=             # make live ALL=1: also every handover, renewal, pseudonym change, ledger write
 DEMO = $(PY) network/run_scenario.py --vehicles $(strip $(CARS)) --duration $(strip $(SIM_TIME)) --seed $(SEED) \
 	--backend $(BACKEND) --protocol real --mobility-step 0.1 --rsu-spacing $(strip $(RSU_SPACING)) \
 	--attacker-ratio $(strip $(ATTACKERS)) --attack $(strip $(ATTACK_TYPE)) --attack-start $(strip $(ATTACK_AT)) \
@@ -134,7 +135,7 @@ demo: $(PY)
 # blockchain revocation, the attacker shut out (PROFILE=Phase-I for the original design)
 PROFILE ?= v3-fast
 live: $(PY)
-	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --live-pace $(strip $(PACE)) --out experiments/results/live/$(PROFILE)
+	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --live --live-pace $(strip $(PACE)) $(if $(strip $(ALL)),--live-all) --out experiments/results/live/$(PROFILE)
 
 # replay a finished run the same way, without simulating (RUN=<run folder>, SPEED=sim s per s)
 RUN ?= experiments/results/demo/v3-fast
