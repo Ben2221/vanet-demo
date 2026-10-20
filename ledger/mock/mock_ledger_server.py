@@ -54,6 +54,7 @@ class State:
         self.reports: dict[str, dict[str, dict[str, Any]]] = {}
         self.revocations: dict[str, dict[str, Any]] = {}
         self.traces: dict[str, dict[str, Any]] = {}
+        self.weights: dict[str, int] = {}          # RSU -> report weight per mille (default 1000)
         self.activity: list[dict[str, Any]] = []
         self.block_number = 1
 
@@ -525,7 +526,9 @@ async def report_misbehaviour(request: Request,
                 reports[name] = {"pid": pid, "rsuId": name, "evidenceHash": evidence,
                                  "attackType": attack, "ts": current}
                 count = len(reports)
-                newly_revoked = count >= state.config["K"]
+                # trust weights (SetReporterWeight): plain K-of-RSUs while every weight is 1000
+                weight = sum(state.weights.get(r, 1000) for r in reports)
+                newly_revoked = weight >= state.config["K"] * 1000
                 if newly_revoked:
                     reporters = sorted(reports)
                     state.revocations[pid] = revoked_record(
@@ -534,6 +537,29 @@ async def report_misbehaviour(request: Request,
                 result = report_result(pid, count=count, revoked=newly_revoked,
                                        newly_revoked=newly_revoked)
     return write(name, "ReportMisbehaviour", result)
+
+
+@app.put("/weights/{rsu_id}")
+async def set_reporter_weight(rsu_id: str, request: Request,
+                              x_identity: str | None = Header(default=None, alias="X-Identity")):
+    name = require_role(get_identity(x_identity, "ta1"), "TA")
+    valid_name(rsu_id, "rsuId")
+    body = await json_body(request)
+    weight = body.get("weightMilli")
+    if not isinstance(weight, int) or isinstance(weight, bool) or not 0 <= weight <= 1000:
+        error(400, "ERR_BAD_INPUT", "weightMilli must be an integer between 0 and 1000")
+    with state.lock:
+        state.weights[rsu_id] = weight
+        result = {"rsuId": rsu_id, "weightMilli": weight, "updatedTs": now_ms()}
+    return write(name, "SetReporterWeight", result)
+
+
+@app.get("/weights/{rsu_id}")
+def get_reporter_weight(rsu_id: str, x_identity: str | None = Header(default=None, alias="X-Identity")):
+    get_identity(x_identity)
+    valid_name(rsu_id, "rsuId")
+    with state.lock:
+        return evaluate({"rsuId": rsu_id, "weightMilli": state.weights.get(rsu_id, 1000), "updatedTs": 0})
 
 
 @app.get("/pseudonyms/{pid}")

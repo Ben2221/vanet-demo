@@ -32,10 +32,10 @@ import urllib.parse
 import urllib.request
 
 WRITES = {"register_root", "set_policy", "record_auth", "report_misbehaviour",
-          "request_trace", "approve_trace", "revoke"}
-READS = {"get_auth", "is_revoked", "get_revoked_since", "get_trace", "get_policy", "get_root"}
+          "request_trace", "approve_trace", "revoke", "set_weight"}
+READS = {"get_auth", "is_revoked", "get_revoked_since", "get_trace", "get_policy", "get_root", "get_reports"}
 
-TA_ONLY = {"register_root", "set_policy", "revoke"}
+TA_ONLY = {"register_root", "set_policy", "revoke", "set_weight"}
 RSU_ONLY = {"record_auth", "report_misbehaviour", "approve_trace"}
 RSU_OR_TA = {"request_trace"}
 
@@ -62,11 +62,19 @@ def check_caller(caller: str, fn: str) -> None:
 
 
 class InMemoryLedger:
-    """The vanetauth chaincode in memory. Real identities are never stored."""
+    """The vanetauth chaincode in memory. Real identities are never stored.
+
+    ``trust_weighted`` (--trust-weighted): a pseudonym is revoked once the *weights* of
+    its distinct reporters sum to report_k (every weight starts at 1.0, so this is the
+    plain K-of-RSUs rule until the TA lowers a weight with set_weight after an
+    investigation found a report wrong)."""
 
     def __init__(self, report_k: int = 2, trace_threshold: int = 3,
-                 commit_ms: float = 500.0, commit_jitter: float = 0.2, seed: int = 1) -> None:
+                 commit_ms: float = 500.0, commit_jitter: float = 0.2, seed: int = 1,
+                 trust_weighted: bool = False) -> None:
         self.report_k = report_k
+        self.trust_weighted = trust_weighted
+        self.weights: dict[str, float] = {}
         self.trace_threshold = trace_threshold
         self.commit_ms = commit_ms
         self.commit_jitter = commit_jitter
@@ -105,9 +113,18 @@ class InMemoryLedger:
             pid = a["pid"]
             reps = self.reports.setdefault(pid, {})
             reps[caller] = a["evidence_hash"]
-            if len(reps) >= self.report_k:
+            if self.trust_weighted:
+                weight = sum(self.weights.get(r, 1.0) for r in reps)
+                if weight >= self.report_k - 1e-9:
+                    self._revoke(pid, f"{len(reps)} RSU reports, weight {weight:.2f}")
+            elif len(reps) >= self.report_k:
                 self._revoke(pid, f"{len(reps)} RSU reports")
             return self._commit(reports=len(reps), revoked=pid in self.revoked)
+        if fn == "set_weight":
+            self.weights[a["rsu"]] = min(1.0, max(0.0, float(a["weight"])))
+            return self._commit()
+        if fn == "get_reports":
+            return {"reports": dict(self.reports.get(a["pid"], {}))}
         if fn == "request_trace":
             rid = a["req_id"]
             if rid in self.traces:
@@ -283,6 +300,12 @@ class RestLedgerClient:
         cfg = {"K": self.report_k, "traceThreshold": self.trace_threshold,
                "maxAuthTtlSec": 86400, "demoMode": True}
         self._ok(*self._http("TA", "PUT", "/config", cfg, "set_config"))
+        # trust weights live on the ledger and outlive a run: every RSU identity starts at full weight
+        for rsu in self.rsu_identities:
+            status, _ = self._http("TA", "PUT", f"/weights/{urllib.parse.quote(rsu, safe='')}", {"weightMilli": 1000},
+                                   "set_weight")
+            if status == 501:
+                break                   # an older chaincode without weights
 
     @staticmethod
     def _written(out: dict, **extra) -> dict:
@@ -342,6 +365,10 @@ class RestLedgerClient:
             tr = self._trace(self._ok(status, out).get("result") or {})
             return {"txId": out.get("txId", ""), "commitMs": float(out.get("commitMs", 0.0)),
                     "approvals": len(tr["approvals"]), "approved": tr["approved"]}
+        if fn == "set_weight":
+            path = f"/weights/{q(self.identity(a['rsu']), safe='')}"
+            body = {"weightMilli": int(round(min(1.0, max(0.0, float(a["weight"]))) * 1000))}
+            return self._written(self._ok(*self._http(caller, "PUT", path, body, fn)))
         if fn == "revoke":
             req_id = next((self._trace_of_pid[p] for p in a["pids"] if p in self._trace_of_pid), "none")
             body = {"pids": [self.pid(p) for p in a["pids"]], "reason": (a.get("reason") or "TA")[:128]}
@@ -371,6 +398,13 @@ class RestLedgerClient:
             # only this run's pseudonyms map back; the rest belong to other runs
             return {"revoked": [self._pid_back[r["pid"]] for r in items if r.get("pid") in self._pid_back],
                     "cursor": cursor}
+        if fn == "get_reports":
+            status, out = self._http(caller, "GET", f"/pseudonyms/{self.pid(a['pid'])}", None, fn)
+            if status == 404:
+                return {"reports": {}}
+            back = {v: k for k, v in self._rsu_map.items()}
+            reporters = (self._ok(status, out).get("result") or {}).get("reporters") or []
+            return {"reports": {back.get(r, r): "" for r in reporters}}
         if fn == "get_trace":
             status, out = self._http(caller, "GET", f"/traces/{self.req(a['req_id'])}", None, fn)
             if status == 404:
@@ -414,11 +448,13 @@ def check_gateway(url: str) -> None:
 
 
 def make_client(spec: str, *, report_k: int = 2, trace_threshold: int = 3,
-                commit_ms: float = 500.0, seed: int = 1, identity_header: str = "X-Identity"):
+                commit_ms: float = 500.0, seed: int = 1, identity_header: str = "X-Identity",
+                trust_weighted: bool = False):
     """spec: 'mock' (Person 2's mock, else built-in), 'builtin', or a gateway URL."""
     if spec.startswith("http://") or spec.startswith("https://"):
         check_gateway(spec)
         rsus = [s.strip() for s in os.environ.get("LEDGER_RSU_IDENTITIES", "").split(",") if s.strip()]
+        # trust weights live in the chaincode (SetReporterWeight); nothing to switch on here
         return RestLedgerClient(spec, identity_header, report_k=report_k,
                                 trace_threshold=trace_threshold, rsu_identities=rsus)
     if spec == "mock":
@@ -432,5 +468,5 @@ def make_client(spec: str, *, report_k: int = 2, trace_threshold: int = 3,
             pass
     if spec in ("mock", "builtin"):
         return InMemoryLedger(report_k=report_k, trace_threshold=trace_threshold,
-                              commit_ms=commit_ms, seed=seed)
+                              commit_ms=commit_ms, seed=seed, trust_weighted=trust_weighted)
     raise ValueError(f"unknown ledger '{spec}'")

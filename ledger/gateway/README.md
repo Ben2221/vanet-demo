@@ -75,6 +75,7 @@ on a trusted local/demo network; do not expose it as a production service.
 | `POST /auth-records`, `GET /auth-records/:pid`, `GET /auth-records?since=` | Deployed RSU auth writes and active-auth queries |
 | `GET /access-check?pid=&class=&service=` | Deployed policy, revocation, and auth status decision |
 | `POST /reports`, `GET /pseudonyms/:pid`, `GET /revoked?since=`, `GET /revoked/:pid` | Deployed report and revocation functions |
+| `PUT /weights/:rsuId` (TA, `{"weightMilli": 0..1000}`), `GET /weights/:rsuId` | Trust-weighted revocation (`SetReporterWeight` / `GetReporterWeight`, chaincode 1.5): a pseudonym is revoked once its reporters' weights sum to K x 1000; every weight is 1000 until the TA lowers it |
 | `POST /traces`, `GET /traces/:id`, `POST /traces/:id/approve`, `POST /traces/:id/revoke` | Deployed Stage C trace core |
 | `GET /traces?status=`, `POST /traces/:id/shares` | Intentionally not deployed; return 501 `NOT_DEPLOYED` |
 | `GET /snapshot?since=0` | Parallel full/incremental sync snapshot |

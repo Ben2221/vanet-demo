@@ -714,3 +714,34 @@ def test_snapshot_full_and_incremental_lists(stage_c_environment):
     assert status == 200
     assert empty_delta["result"]["revoked"] == []
     assert empty_delta["result"]["auths"] == []
+
+
+def test_trust_weights_gate_revocation():
+    """--trust-weighted: two half-weight reports do not revoke, a full-weight one completes it."""
+    rsus = ("rsu4", "rsu5")
+    status, body = request("PUT", "/config", identity="ta1",
+                           payload={"K": 2, "traceThreshold": 3, "maxAuthTtlSec": 3600, "demoMode": True})
+    assert status == 200, body
+    try:
+        for rsu in rsus:
+            status, body = request("PUT", f"/weights/{rsu}", identity="ta1", payload={"weightMilli": 500})
+            assert status == 200, body
+        wait_for_cross_peer_commit()
+        status, body = request("GET", f"/weights/{rsus[0]}", identity="rsu1")
+        assert status == 200 and body["result"]["weightMilli"] == 500
+        status, body = request("PUT", "/weights/rsu1", identity="rsu1", payload={"weightMilli": 1000})
+        assert status == 403
+        status, body = request("PUT", "/weights/rsu1", identity="ta1", payload={"weightMilli": 1001})
+        assert status == 400
+        pid = random_hash()
+        for rsu in rsus:
+            status, body = request("POST", "/reports", identity=rsu,
+                                   payload={"pid": pid, "evidenceHash": random_hash()})
+            assert status == 200 and not body["result"]["revoked"], body
+            wait_for_cross_peer_commit()
+        status, body = request("POST", "/reports", identity="rsu6",
+                               payload={"pid": pid, "evidenceHash": random_hash()})
+        assert status == 200 and body["result"]["revoked"], body
+    finally:
+        for rsu in rsus:
+            request("PUT", f"/weights/{rsu}", identity="ta1", payload={"weightMilli": 1000})

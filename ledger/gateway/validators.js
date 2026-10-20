@@ -162,6 +162,14 @@ function validateReport(request) {
   }
 }
 
+function validateWeight(request) {
+  name(request.params.rsuId, 'rsuId');
+  const body = bodyObject(request);
+  if (!Number.isInteger(body.weightMilli) || body.weightMilli < 0 || body.weightMilli > 1000) {
+    bad('weightMilli must be an integer between 0 and 1000');
+  }
+}
+
 function validateTraceRequest(request) {
   const body = bodyObject(request);
   reqId(body.reqId);
@@ -203,6 +211,7 @@ module.exports = {
   validatePolicy,
   validateReport,
   validateRevoke,
+  validateWeight,
   validateRoot,
   validateServiceParam,
   validateSince,

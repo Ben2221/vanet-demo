@@ -52,8 +52,8 @@ func TestExportedContractReturnTypesAreJSONSafe(t *testing.T) {
 			assertJSONSafeType(t, method.Name+" return", output)
 		}
 	}
-	if functionCount != 21 {
-		t.Fatalf("reflected %d contract functions; want 21 deployed business functions and WhoAmI", functionCount)
+	if functionCount != 23 {
+		t.Fatalf("reflected %d contract functions; want 23 deployed business functions and WhoAmI", functionCount)
 	}
 
 	stub := shimtest.NewMockStub("return-shape-test", nil)

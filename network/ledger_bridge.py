@@ -34,6 +34,7 @@ class LedgerCache:
         self.auth: dict[str, dict] = {}
         self.revoked: dict[str, float] = {}        # pid -> sim time it became visible
         self.traces: dict[str, dict] = {}
+        self.weights: dict[str, float] = {}        # --trust-weighted: RSU -> report weight
 
 
 class LedgerBridge:
@@ -143,6 +144,8 @@ class LedgerBridge:
                 self._mark_revoked([a["pid"]])
         elif fn == "revoke":
             self._mark_revoked(list(a["pids"]))
+        elif fn == "set_weight":
+            c.weights[a["rsu"]] = min(1.0, max(0.0, float(a["weight"])))
         elif fn in ("request_trace", "approve_trace"):
             tr = self.client.call("TA", "get_trace", req_id=a["req_id"]).get("trace")
             if tr:
@@ -193,6 +196,22 @@ class LedgerView:
     def revoked(self) -> list[str]:
         """Revoked pseudonyms, oldest first."""
         return list(self.bridge.cache.revoked)
+
+    def revoked_since(self, t: float) -> list[str]:
+        """Pseudonyms whose revocation became visible at or after sim time t."""
+        return [pid for pid, when in self.bridge.cache.revoked.items() if when >= t]
+
+    def get_reports(self, pid: str) -> dict:
+        """{rsu: evidence} of a pseudonym, read from the ledger now (TA investigations)."""
+        return self.bridge.client.call(self.identity, "get_reports", pid=pid).get("reports", {})
+
+    def weight(self, rsu: str) -> float:
+        """--trust-weighted: an RSU's report weight as committed on the ledger (1.0 by default)."""
+        return self.bridge.cache.weights.get(rsu, 1.0)
+
+    def set_weight(self, rsu: str, weight: float, on_commit=None) -> None:
+        """--trust-weighted: the TA sets an RSU's report weight after an investigation."""
+        self._w("set_weight", on_commit, rsu=rsu, weight=weight)
 
     def get_trace(self, req_id: str) -> dict | None:
         return self.bridge.cache.traces.get(req_id)

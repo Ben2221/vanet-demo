@@ -25,7 +25,7 @@ if [[ -n "${CC_VERSION:-}" || -n "${CC_SEQ:-}" ]]; then
 elif peer lifecycle chaincode querycommitted -C "$CHANNEL" -n "$CC_NAME" >/dev/null 2>&1; then
   read -r CC_VERSION CC_SEQ < "$VERSION_FILE"
 else
-  CC_VERSION="${FRESH_CC_VERSION:-1.4}"
+  CC_VERSION="${FRESH_CC_VERSION:-1.5}"
   CC_SEQ=1
 fi
 
