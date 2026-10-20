@@ -34,8 +34,24 @@ function resolvePrivateKeyPath(configuredPath) {
   return candidates[0];
 }
 
+// RSU_COUNT=N adds rsu5..rsuN, copied from rsu1 (enroll them with the same RSU_COUNT in
+// ledger/network/enroll_identities.sh)
+function addRsuIdentities(parsed, count) {
+  const template = parsed.rsu1;
+  if (!template || !(count > 0)) return parsed;
+  for (let n = 2; n <= count; n += 1) {
+    const name = `rsu${n}`;
+    if (!parsed[name]) {
+      parsed[name] = Object.fromEntries(Object.entries(template).map(([k, v]) =>
+        [k, typeof v === 'string' ? v.replace(/rsu1@/g, `${name}@`) : v]));
+    }
+  }
+  return parsed;
+}
+
 function loadIdentities(filePath = path.join(__dirname, 'identities.json')) {
-  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const parsed = addRsuIdentities(JSON.parse(fs.readFileSync(filePath, 'utf8')),
+    Number(process.env.RSU_COUNT || 0));
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
     throw new Error('identities.json must contain an object keyed by identity name');
   }

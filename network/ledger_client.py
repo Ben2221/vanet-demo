@@ -124,6 +124,9 @@ class InMemoryLedger:
             tr["approved"] = len(tr["approvals"]) >= self.trace_threshold
             return self._commit(approvals=len(tr["approvals"]), approved=tr["approved"])
         if fn == "revoke":
+            # as the chaincode: the TA revokes only through an approved trace
+            if a.get("req_id") is not None and not self.traces.get(a["req_id"], {}).get("approved"):
+                raise LedgerError(f"trace {a['req_id']} must be approved before revocation")
             for pid in a["pids"]:
                 self._revoke(pid, a.get("reason", "TA"))
             return self._commit()
@@ -334,7 +337,17 @@ class RestLedgerClient:
             out.update(reqId=a["req_id"], pid=a["pid"])
             return out
         if fn == "approve_trace":
-            status, out = self._http(caller, "POST", f"/traces/{self.req(a['req_id'])}/approve", None, fn)
+            # RSUs approve the same trace at about the same time: Fabric validates one write per key
+            # and block and rejects the rest (MVCC conflict, TX_CONFLICT). Retry those; the time spent
+            # stays in the measured commit time.
+            t0 = time.perf_counter()
+            for attempt in range(20):
+                status, out = self._http(caller, "POST", f"/traces/{self.req(a['req_id'])}/approve", None, fn)
+                if status != 409 or "TX_CONFLICT" not in out.get("_error", ""):
+                    break
+                time.sleep(0.05 + 0.1 * random.random() * (attempt + 1))
+            if status == 200:
+                out["commitMs"] = (time.perf_counter() - t0) * 1000
             if status == 409:      # this RSU already approved, or the trace is no longer pending
                 tr = self.call(caller, "get_trace", req_id=a["req_id"]).get("trace") or {}
                 return {"txId": "", "commitMs": 0.0, "approvals": len(tr.get("approvals", [])),
@@ -343,7 +356,10 @@ class RestLedgerClient:
             return {"txId": out.get("txId", ""), "commitMs": float(out.get("commitMs", 0.0)),
                     "approvals": len(tr["approvals"]), "approved": tr["approved"]}
         if fn == "revoke":
-            req_id = next((self._trace_of_pid[p] for p in a["pids"] if p in self._trace_of_pid), "none")
+            # the chaincode only accepts a revocation through an approved trace: use the one the TA
+            # acted on; guessing from the pids can pick another, still pending, trace of the vehicle
+            req_id = a.get("req_id") or next((self._trace_of_pid[p] for p in a["pids"]
+                                              if p in self._trace_of_pid), "none")
             body = {"pids": [self.pid(p) for p in a["pids"]], "reason": (a.get("reason") or "TA")[:128]}
             out = self._ok(*self._http(caller, "POST", f"/traces/{self.req(req_id)}/revoke", body, fn))
             return self._written(out, revoked_count=len(body["pids"]))

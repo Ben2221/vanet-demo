@@ -234,5 +234,6 @@ class LedgerView:
     def set_policy(self, service: str, classes: list, on_commit=None) -> None:
         self._w("set_policy", on_commit, service=service, classes=classes)
 
-    def revoke(self, pids: list[str], reason: str, on_commit=None) -> None:
-        self._w("revoke", on_commit, pids=pids, reason=reason)
+    def revoke(self, pids: list[str], reason: str, on_commit=None, req_id: str | None = None) -> None:
+        """``req_id``: the approved trace that authorises this revocation (Fabric requires one)."""
+        self._w("revoke", on_commit, pids=pids, reason=reason, req_id=req_id)

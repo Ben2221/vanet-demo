@@ -1,0 +1,7 @@
+{
+  "name": "final_attacks",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 120, "backend": "ns3", "ledger": "http://localhost:3000", "protocol": "real",
+            "vehicles": 60, "attacker_ratio": 0.1, "attack_start": 20},
+  "grid": {"attack": ["const_pos", "random_pos", "const_speed", "random_speed", "sudden_stop", "flood"]}
+}

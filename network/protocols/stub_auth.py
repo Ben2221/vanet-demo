@@ -119,7 +119,7 @@ def _ta_loop(env) -> None:
             env.rsus[0].log("IDENTITY_REVEALED", 0, None, f"{tr['pid']} -> {owner} "
                             f"after {len(tr.get('approvals', []))} approvals")
             if node is not None:
-                ta.revoke([p.hex() for p in node.app.pids], f"trace {req_id}")
+                ta.revoke([p.hex() for p in node.app.pids], f"trace {req_id}", req_id=req_id)
     env.rsus[0].schedule(1.0, _ta_loop, env)
 
 

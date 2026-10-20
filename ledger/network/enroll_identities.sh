@@ -46,6 +46,8 @@ enroll_identity() {
 }
 
 enroll_identity 1 ta1 "${TA1_SECRET:-ta1pw}" "$ORG1_DIR" ca-org1 7054 "$ORG1_CA_TLS"
-for n in 1 2 3 4; do
+# one Fabric identity per simulated RSU, so "K different RSUs" and the trace threshold are enforced
+# by Fabric itself (RSU_COUNT=9 for the grid scenario, 27 for Monaco; the gateway reads the same variable)
+for n in $(seq 1 "${RSU_COUNT:-4}"); do
   enroll_identity 2 "rsu$n" "${RSU_SECRET_PREFIX:-rsu}${n}pw" "$ORG2_DIR" ca-org2 8054 "$ORG2_CA_TLS"
 done

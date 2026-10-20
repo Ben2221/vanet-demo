@@ -123,7 +123,7 @@ def _ta_loop(env) -> None:
             continue
         env.rsus[0].log("IDENTITY_REVEALED", 0, None,
                         f"{tr['pid']} -> {identity['vehicle']} with {len(shares)} shares")
-        env.ta_ledger.revoke(identity["pids"], f"trace {req_id}")
+        env.ta_ledger.revoke(identity["pids"], f"trace {req_id}", req_id=req_id)
     env.rsus[0].schedule(1.0, _ta_loop, env)
 
 
