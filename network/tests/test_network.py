@@ -56,6 +56,20 @@ def test_ns2_parser(tmp_path):
     assert tr.position(6.0)[0] == -1000.0
 
 
+def test_vehicle_keeps_driving_after_its_last_fcd_sample(tmp_path):
+    # last sample at t = 2 at 20 m/s heading east (SUMO angle 90): until it leaves at t = 3 it must
+    # keep moving, not stand still (a stop from 20 m/s in no time looks like a lie to the detector)
+    from mobility import fcd_to_ns2
+    fcd = tmp_path / "fcd.xml"
+    fcd.write_text('<fcd-export>' + "".join(
+        f'<timestep time="{t}.00"><vehicle id="v" x="{100 + 20 * t}" y="50" speed="20" angle="90"/></timestep>'
+        for t in range(3)) + '</fcd-export>')
+    fcd_to_ns2.convert(fcd, tmp_path, step=1.0)
+    tr = ns2_mobility.load(tmp_path / "trace.ns2")[0]
+    assert tr.position(2.5) == pytest.approx((150.0, 50.0), abs=0.01)
+    assert tr.velocity(2.5) == pytest.approx((20.0, 0.0), abs=0.01)
+
+
 def test_position_table_does_not_slide_into_the_parking_spot(tmp_path):
     # the vehicle leaves at t = 5 (jump to -1000); just before, the radio must still see it on the road
     f = tmp_path / "t.ns2"

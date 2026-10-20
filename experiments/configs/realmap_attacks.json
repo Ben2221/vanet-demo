@@ -1,0 +1,7 @@
+{
+  "name": "realmap_attacks",
+  "seeds": [1, 2, 3],
+  "fixed": {"net": "mobility/maps/monaco_centre.net.xml", "duration": 120, "backend": "auto", "ledger": "mock",
+            "protocol": "real", "vehicles": 100, "attacker_ratio": 0.1, "attack_start": 20},
+  "grid": {"attack": ["const_pos", "random_pos", "const_speed", "random_speed", "sudden_stop", "flood"]}
+}

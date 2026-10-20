@@ -60,24 +60,30 @@ def grid_net(junctions: int = 5, block: float = 250.0, lanes: int = 2) -> Path:
     return net
 
 
-def osm_net(osm_file: Path) -> Path:
-    """Convert an OSM extract (e.g. from osmWebWizard.py) into a SUMO network."""
+def osm_net(osm_file: Path, bbox: str | None = None) -> Path:
+    """Convert an OSM extract (e.g. from osmWebWizard.py) into a SUMO network.
+    ``bbox`` = "minlon,minlat,maxlon,maxlat" keeps only the roads inside that box
+    (cut a city centre out of a larger export)."""
     NETS_DIR.mkdir(parents=True, exist_ok=True)
-    net = NETS_DIR / (osm_file.name.split(".")[0] + ".net.xml")
+    name = osm_file.name.split(".")[0]
+    if bbox:
+        name += "_" + "_".join(f"{float(v):.4f}" for v in bbox.split(","))
+    net = NETS_DIR / (name + ".net.xml")
     if not net.exists():
         _run([
             binary("netconvert"), "--osm-files", str(osm_file),
             "--geometry.remove", "--ramps.guess", "--junctions.join",
             "--tls.guess-signals", "--tls.discard-simple", "--tls.join",
             "--keep-edges.by-vclass", "passenger", "--remove-edges.isolated",
+            *(["--keep-edges.in-geo-boundary", bbox] if bbox else []),
             "--output-file", str(net),
-        ])
+        ], NETS_DIR / (name + ".netconvert.log"))
     return net
 
 
-def resolve_net(net_arg: str, osm: str | None) -> Path:
+def resolve_net(net_arg: str, osm: str | None, bbox: str | None = None) -> Path:
     if osm:
-        return osm_net(Path(osm))
+        return osm_net(Path(osm), bbox)
     if net_arg == "grid":
         return grid_net()
     path = Path(net_arg)
@@ -99,9 +105,9 @@ def ensure_scenario(vehicles: int = 100, duration: float = 300.0, seed: int = 1,
                     net: str = "grid", osm: str | None = None,
                     rsu_spacing: float = 450.0, rsu_range: float = 300.0,
                     insert_fraction: float = 0.5, traceexporter: bool = False,
-                    force: bool = False, quiet: bool = False) -> dict:
+                    force: bool = False, quiet: bool = False, bbox: str | None = None) -> dict:
     """Build (or reuse) a scenario. Returns a dict of paths and counts."""
-    net_path = resolve_net(net, osm)
+    net_path = resolve_net(net, osm, bbox)
     d = scenario_dir(net_path, vehicles, duration, seed)
     meta_file = d / "scenario.json"
     if force and d.exists():
@@ -180,6 +186,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--net", default="grid", help="'grid' or a .net.xml file (e.g. an InTAS cut)")
     ap.add_argument("--osm", default=None, help="OSM extract to convert (osmWebWizard output)")
+    ap.add_argument("--bbox", default=None, help="with --osm: keep roads in minlon,minlat,maxlon,maxlat")
     ap.add_argument("--rsu-spacing", type=float, default=450.0)
     ap.add_argument("--rsu-range", type=float, default=300.0)
     ap.add_argument("--insert-fraction", type=float, default=0.5,
@@ -189,7 +196,7 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="rebuild even if cached")
     a = ap.parse_args()
     ensure_scenario(a.vehicles, a.duration, a.seed, a.net, a.osm, a.rsu_spacing,
-                    a.rsu_range, a.insert_fraction, a.traceexporter, a.force)
+                    a.rsu_range, a.insert_fraction, a.traceexporter, a.force, bbox=a.bbox)
 
 
 if __name__ == "__main__":

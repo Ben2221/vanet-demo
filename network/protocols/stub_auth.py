@@ -263,6 +263,11 @@ class Vehicle:
         self.current = None
         node.log("PSEUDONYM_CHANGE", 0, None, f"{why} -> {self.pid.hex()}")
 
+    def on_start(self, node) -> None:
+        # ground truth for evaluation only (as protocol/sim_app.py): which vehicle uses which
+        # pseudonym, so flags on honest vehicles' first pseudonym are counted too
+        node.log("PID_ASSIGN", 0, None, self.pid.hex())
+
     def on_stop(self, node) -> None:
         self.pending = None
 

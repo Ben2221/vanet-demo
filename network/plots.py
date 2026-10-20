@@ -138,8 +138,8 @@ def plot_snapshot(scenario_dir: Path, t: float = 150.0, out: Path | None = None)
     ax.set_aspect("equal")
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
-    ax.set_title(f"Scenario at t = {t:g} s", loc="left", color=INK)
-    ax.legend(frameon=False, loc="upper right")
+    # vehicle count in the title: a legend box would cover RSU labels on dense real maps
+    ax.set_title(f"Scenario at t = {t:g} s, {len(on)} vehicles (blue), RSUs (orange)", loc="left", color=INK)
     out = out or d / f"snapshot_t{int(t)}.png"
     fig.tight_layout()
     fig.savefig(out, dpi=150)

@@ -91,7 +91,7 @@ def execute(params: dict, out: Path, force: bool) -> tuple[Path, str | None]:
     return out, None
 
 
-SCENARIO_KEYS = ("vehicles", "duration", "seed", "net", "osm", "rsu_spacing", "rsu_range")
+SCENARIO_KEYS = ("vehicles", "duration", "seed", "net", "osm", "rsu_spacing", "rsu_range", "bbox")
 
 
 def prebuild(runs: list[dict]) -> None:
@@ -99,7 +99,7 @@ def prebuild(runs: list[dict]) -> None:
     (same vehicles, duration, seed) would otherwise build it at the same time and break it."""
     from mobility.build_scenario import ensure_scenario
     defaults = {"vehicles": 100, "duration": 300.0, "seed": 1, "net": "grid", "osm": None,
-                "rsu_spacing": 450.0, "rsu_range": 300.0}
+                "rsu_spacing": 450.0, "rsu_range": 300.0, "bbox": None}
     seen = set()
     for p in runs:
         key = tuple(p.get(k, defaults[k]) for k in SCENARIO_KEYS)
@@ -108,7 +108,7 @@ def prebuild(runs: list[dict]) -> None:
         seen.add(key)
         k = dict(zip(SCENARIO_KEYS, key))
         ensure_scenario(int(k["vehicles"]), float(k["duration"]), int(k["seed"]), k["net"], k["osm"],
-                        float(k["rsu_spacing"]), float(k["rsu_range"]), quiet=True)
+                        float(k["rsu_spacing"]), float(k["rsu_range"]), quiet=True, bbox=k["bbox"])
 
 
 def run_all(cfg: dict, jobs: int, force: bool, collect_only: bool) -> list[dict]:

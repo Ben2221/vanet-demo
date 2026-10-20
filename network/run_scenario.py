@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--seed", type=int, default=1, help="random seed for SUMO, ns-3 and the apps")
     g.add_argument("--net", default="grid", help="'grid' or a SUMO .net.xml (e.g. an InTAS cut)")
     g.add_argument("--osm", default=None, help="OSM extract to convert instead of the grid")
+    g.add_argument("--bbox", default=None, help="with --osm: keep roads in minlon,minlat,maxlon,maxlat")
     g.add_argument("--rsu-spacing", type=float, default=450.0, help="RSU grid spacing in m (default 450)")
     g.add_argument("--rsu-range", type=float, default=300.0, help="nominal RSU service range in m (default 300)")
     g.add_argument("--mobility", choices=["trace", "traci"], default="trace",
@@ -150,7 +151,7 @@ def main(argv: list[str] | None = None) -> dict:
     a = build_parser().parse_args(argv)
     t_wall = time.time()
     sc = ensure_scenario(a.vehicles, a.duration, a.seed, a.net, a.osm, a.rsu_spacing, a.rsu_range,
-                         quiet=a.quiet)
+                         quiet=a.quiet, bbox=a.bbox)
     vehicles = read_vehicles(sc["node_map"])
     rsus = [RsuSpec(r["node_id"], r["rsu_id"], r["x"], r["y"], r["range_m"]) for r in read_rsus(sc["rsus"])]
 

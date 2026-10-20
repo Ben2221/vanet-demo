@@ -93,6 +93,13 @@ def write_ns2(tracks: list[Track], out_path: Path, step: float) -> None:
             lines.append(
                 f'$ns_ at {ta:.2f} "$node_({nid}) setdest {xb:.2f} {yb:.2f} {dist / dt:.3f}"'
             )
+        # between the last sample and leaving, keep driving at the last speed and heading (SUMO angle:
+        # 0 = north, clockwise); standing still for that step would be an impossible stop from full speed
+        tl, xl, yl, vl, al = s[-1]
+        if vl > 0.1:
+            xe = xl + vl * step * math.sin(math.radians(al))
+            ye = yl + vl * step * math.cos(math.radians(al))
+            lines.append(f'$ns_ at {tl:.2f} "$node_({nid}) setdest {xe:.2f} {ye:.2f} {vl:.3f}"')
         # leave the map one step after the last sample: back to the parking spot
         t_out = s[-1][0] + step
         px, py = park_position(nid)

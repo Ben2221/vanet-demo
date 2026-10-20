@@ -282,6 +282,34 @@ const mid = dig.find((r) => r.vehicles === 60) || dig[0] || {};
   caption(s, "Property rows are design properties, not measurements. Full IEEE 1609.2 SCMS also splits linkage across authorities, at the cost of more online infrastructure.");
 }
 
+// ------------------------------------------------------------------ 10c real city
+{
+  const rs = rows("realmap_schemes"), ra = rows("realmap_attacks");
+  const ours = (v) => rs.find((r) => r.protocol === "real" && r.vehicles === v) || {};
+  const base = (p, v) => rs.find((r) => r.protocol === p && r.vehicles === v) || {};
+  const sum = (k) => ra.reduce((a, r) => a + (r[k] || 0), 0);
+  const s = pres.addSlide({ masterName: "CONTENT" });
+  title(s, "On a real city: central Monaco from OpenStreetMap");
+  s.addImage({ path: path.join(__dirname, "..", "figures", "monaco_snapshot.png"), x: 0.6, y: 1.35, w: 5.2, h: 5.2 });
+  const hdr = (t) => ({ text: t, options: { bold: true, color: WHITE, fill: { color: INK } } });
+  s.addTable([
+    [hdr(""), hdr("60 veh"), hdr("120 veh")],
+    ["Auth latency, median", f(ours(60).auth_ms_median, 2) + " ms", f(ours(120).auth_ms_median, 2) + " ms"],
+    ["  ECDSA / central", `${f(base("experiments.baselines.ecdsa_pki", 60).auth_ms_median, 2)} / ${f(base("experiments.baselines.central_auth", 60).auth_ms_median, 1)} ms`,
+      `${f(base("experiments.baselines.ecdsa_pki", 120).auth_ms_median, 2)} / ${f(base("experiments.baselines.central_auth", 120).auth_ms_median, 1)} ms`],
+    ["Handover success", f(100 * ours(60).handover_success_ratio, 1) + " %", f(100 * ours(120).handover_success_ratio, 1) + " %"],
+    ["BSM delivery ratio", f(ours(60).pdr, 3), f(ours(120).pdr, 3)],
+    ["Attackers reported / revoked", `${f(100 * ours(60).detection_rate, 0)} / ${f(100 * ours(60).revocation_rate, 0)} %`,
+      `${f(100 * ours(120).detection_rate, 0)} / ${f(100 * ours(120).revocation_rate, 0)} %`],
+  ], { x: 6.2, y: 1.45, w: 6.5, colW: [2.9, 1.8, 1.8], fontFace: BODY, fontSize: 13, color: INK,
+    border: { type: "solid", color: GRID, pt: 0.75 }, fill: { color: WHITE }, rowH: 0.45, valign: "middle" });
+  s.addText([
+    { text: `All 6 attack types (100 vehicles): ${f(100 * sum("detection_rate") / Math.max(ra.length, 1), 0)} % reported, ${f(100 * sum("revocation_rate") / Math.max(ra.length, 1), 0)} % revoked, 0 honest vehicles revoked.`, options: { breakLine: true } },
+    { text: "New on the real map: hairpins and U-turns make the heading check flag a few honest cars; K-of-W reporting and the two-RSU rule stop every one of them before revocation." },
+  ], { x: 6.2, y: 4.45, w: 6.5, h: 2.0, fontSize: 14, color: INK, isTextBox: true, margin: 0, valign: "top", paraSpaceAfter: 8 });
+  caption(s, "1.9 × 2.3 km, 437 junctions, 27 RSUs. OSM data © OpenStreetMap contributors via the MoST scenario (Codecá & Härri, 2017).");
+}
+
 // ------------------------------------------------------------------ 11 what changed
 {
   const s = pres.addSlide({ masterName: "CONTENT" });
