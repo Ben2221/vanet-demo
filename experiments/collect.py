@@ -128,7 +128,10 @@ def _protocol_stats(d: Path) -> dict:
     f = d / "protocol_stats.json"
     if not f.exists():
         return {}
-    st = json.loads(f.read_text())
+    try:
+        st = json.loads(f.read_text())
+    except json.JSONDecodeError:
+        return {}                      # an interrupted run
     out: dict = {}
 
     def ratio(block: dict) -> float | None:
@@ -178,9 +181,15 @@ def _tracking(d: Path) -> dict:
     if not obs.exists():
         return {}
     if cache.exists() and cache.stat().st_mtime >= obs.stat().st_mtime:
-        return json.loads(cache.read_text())
+        try:
+            return json.loads(cache.read_text())
+        except json.JSONDecodeError:
+            pass                       # half-written by an interrupted run: recompute
     from experiments.tracker import analyse
-    res = analyse(obs)
+    try:
+        res = analyse(obs)
+    except (ValueError, KeyError):
+        return {}                      # truncated log of an interrupted run
     cache.write_text(json.dumps(res))
     return res
 

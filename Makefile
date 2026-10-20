@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -35,6 +35,7 @@ help:
 	@echo "make detector-model      train the simulator's detector model (--detector-mode hybrid)"
 	@echo "make ledger-bench   real Fabric: commit latency of Raft vs BFT ordering (Docker, Fabric 3.1.5)"
 	@echo "make show           key numbers of every run under experiments/results/"
+	@echo "make demo           live side-by-side: Phase I vs v3-fast vs v3-private on ns-3 (~3 min)"
 	@echo "make mock           in-memory ledger REST server on PORT=$(PORT)"
 	@echo "make gateway        Fabric REST gateway on PORT=$(PORT) (needs make fabric-up)"
 	@echo "make fabric-up      install and start Hyperledger Fabric in Docker"
@@ -105,6 +106,16 @@ report: $(PY)
 
 show: $(PY)
 	$(PY) experiments/show.py
+
+# a live side-by-side for a presentation: Phase I design vs v3-fast on ns-3 (~3 min)
+DEMO = $(PY) network/run_scenario.py --vehicles 50 --duration 60 --seed 1 --backend $(BACKEND) --protocol real \
+	--mobility-step 0.1 --attacker-ratio 0.1 --attack random_pos --attack-start 20 --rsu-cpu --v2v-verify \
+	--privacy-log --compute-times experiments/compute_times_v3.json
+demo: $(PY)
+	$(DEMO) --out experiments/results/demo/Phase-I
+	$(DEMO) --profile v3-fast --out experiments/results/demo/v3-fast
+	$(DEMO) --profile v3-private --out experiments/results/demo/v3-private
+	$(PY) experiments/show.py experiments/results/demo/Phase-I experiments/results/demo/v3-fast experiments/results/demo/v3-private
 
 mock: $(PY)
 	@if ss -ltnH "sport = :$(PORT)" 2>/dev/null | grep -q .; then \

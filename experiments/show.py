@@ -21,16 +21,19 @@ sys.path.insert(0, str(ROOT))
 from experiments.collect import collect_run  # noqa: E402
 
 COLUMNS = [  # (header, key, format)
-    ("auth p50 ms", "auth_ms_median", "{:.2f}"),
-    ("auth p95 ms", "auth_ms_p95", "{:.2f}"),
-    ("hand p95 ms", "handover_ms_p95", "{:.2f}"),
+    ("ticket ms", "ticket_ms_mean", "{:.2f}"),
+    ("hand ms", "handover_ms_mean", "{:.2f}"),
+    ("V2V acc ms", "v2v_accept_ms_mean", "{:.2f}"),
     ("BSM B", "bsm_bytes", "{:.0f}"),
-    ("sec B/BSM", "security_bytes_per_bsm", "{:.0f}"),
+    ("safety B/s", "safety_bytes_per_vehicle_s", "{:.0f}"),
     ("PDR", "pdr", "{:.3f}"),
     ("CBR", "cbr_rsu_mean", "{:.3f}"),
+    ("V2V ok", "v2v_verified_ratio", "{:.3f}"),
+    ("revoked acc", "v2v_revoked_accepted_ratio", "{:.3f}"),
+    ("tracked", "tracking_success", "{:.2f}"),
     ("caught", "attackers_reported", "{:.0f}"),
     ("attackers", "attackers", "{:.0f}"),
-    ("honest rep", "honest_reported", "{:.0f}"),
+    ("honest rev", "honest_revoked", "{:.0f}"),
 ]
 
 
