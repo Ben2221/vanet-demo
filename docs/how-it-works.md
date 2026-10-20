@@ -125,8 +125,11 @@ This is slide 13's access rule in action: Access = valid proof âˆ§ not revoked â
 - **Fake siren** (`--attack fake_emergency`): a car that sets the flag is rejected by every
   receiver. Because the message is signed, it is proof of the lie on its own, so the first RSU
   reports it at once.
-- **Priority** (`--emergency-priority`): RSUs check emergency logins ahead of their queue, at
-  most 5 per second each. That cap limits what false claims can take from everyone else.
+- **Priority** (`--emergency-priority`): emergency logins and the RSUs' answers go on a
+  higher-priority 802.11p queue (AC_VI), and RSUs verify them ahead of their processing queue. Each
+  RSU grants this to at most 5 claims per second, so false claims cannot take much from everyone
+  else. In rush hour the delay is on the radio, not in the RSU's processor: hundreds of logins
+  compete for the channel at once.
 
 `make emergency` measures it on LuST mid-day and rush hour. It reports emergency vs normal
 ticket time, the share of nearby cars warned within 1 s, alert delay, and fake alerts accepted

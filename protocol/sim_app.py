@@ -52,8 +52,10 @@ Emergency vehicles (all off by default):
                         the full ticket and the flag "ev"; receivers accept the flag only under a
                         ticket whose RSU-signed class is "emergency" (else "fake_emergency"; a
                         signed fake is reported at once, it is its own evidence)
-  --emergency-priority  RSUs verify logins for EMERGENCY_SERVICE ahead of their CPU queue,
-                        at most EV_PRIORITY_PER_S per second each (a false claim costs a
+  --emergency-priority  emergency logins, renewals and handovers and the RSUs' answers go on
+                        EDCA access category AC_VI (EV_RADIO_PRIORITY) instead of AC_BE, and
+                        RSUs verify them ahead of their CPU queue (with --rsu-cpu); an RSU grants
+                        this to at most EV_PRIORITY_PER_S claims per second (a false claim costs a
                         priority slot once, then the claimant queues like everyone else)
   --attack fake_emergency  attackers try to log in for EMERGENCY_SERVICE once, then set the
                         "ev" flag on their BSMs from --attack-start
@@ -128,6 +130,7 @@ RSSI_SHADOW_DB = 4.0         # log-normal shadowing of the modelled received pow
 ADAPT_HIGH, ADAPT_LOW, ADAPT_HOLD = 0.30, 0.20, 1.0   # --adaptive-auth: TESLA above 0.30 CBR, sign below 0.20
 EMERGENCY_SERVICE = "emergency-priority"   # the policy allows it to EMERGENCY_CLASS only
 EV_PRIORITY_PER_S = 5        # --emergency-priority: priority-lane logins per RSU per second
+EV_RADIO_PRIORITY = 5        # --emergency-priority: 802.1d user priority 5 = AC_VI (BSMs are on AC_VO)
 EV_WARN_RANGE, EV_WARN_FRESH = 300.0, 1.0   # a vehicle within 300 m of an emergency vehicle should
                                             # hold a verified alert from it at most 1 s old
 
@@ -567,7 +570,7 @@ class RsuApp:
         if self.cpu is not None:
             env.shared.setdefault("cpus", []).append(("rsu", node.name, self.cpu))
         self.rf = bool(cfg.get("revocation_filter"))
-        self.ev_priority = bool(cfg.get("emergency_priority")) and self.cpu is not None
+        self.ev_priority = bool(cfg.get("emergency_priority"))
         self.prio_times: deque[float] = deque()
         self.beacons = 0
         self.recent_pids: deque[str] = deque(maxlen=200)
@@ -682,7 +685,8 @@ class RsuApp:
         verify_cost = self._cost(node, [o for o in ops if o not in issue])
         delay = verify_cost
         run = self.cpu.run if self.cpu is not None else None
-        if self.ev_priority and self._priority(node, data, res):
+        lane = self.ev_priority and self._priority(node, data, res)
+        if lane and self.cpu is not None:
             run = self.cpu.run_priority
         if run is not None:
             delay = run(verify_cost) - node.now()
@@ -694,7 +698,7 @@ class RsuApp:
         extra = {"r": res["r"]} if res.get("r") else {}
         resp = make_message("AUTH_RESP", ok=res["ok"], reason=res["reason"], pid=pid,
                             rsu_id=node.name, handover=False, ticket=res.get("ticket"), **extra)
-        node.send(sender, resp.to_bytes(), delay=delay)
+        node.send(sender, resp.to_bytes(), delay=delay, priority=EV_RADIO_PRIORITY if lane else None)
         if res["ok"]:
             # signed pre-authorization to the neighbours: a handover works before the ledger commit lands
             for i, name in enumerate(self.preauth_targets, 1):
@@ -706,7 +710,9 @@ class RsuApp:
         at most EV_PRIORITY_PER_S per second (the claim is only checked by the verification
         itself, so the cap bounds what false claims can take from everyone else)."""
         f = _fields(data) or {}
-        if f.get("service") != EMERGENCY_SERVICE:
+        ticket = f.get("ticket") if isinstance(f.get("ticket"), dict) else {}
+        payload = ticket.get("payload") if isinstance(ticket.get("payload"), dict) else {}
+        if (f.get("service") or payload.get("service")) != EMERGENCY_SERVICE:    # login / handover
             return False
         ev = _stats(node.env)["ev"]
         now = node.now()
@@ -734,7 +740,8 @@ class RsuApp:
         extra = {k: res[k] for k in ("ticket", "r") if res.get(k)}
         resp = make_message("AUTH_RESP", ok=res["ok"], reason=res["reason"], pid=res.get("pid", ""),
                             rsu_id=node.name, handover=True, **extra)
-        node.send(sender, resp.to_bytes(), delay=delay)
+        lane = self.ev_priority and self._priority(node, data, res)
+        node.send(sender, resp.to_bytes(), delay=delay, priority=EV_RADIO_PRIORITY if lane else None)
         if res.get("ticket"):
             for i, name in enumerate(self.preauth_targets, 1):
                 pre = self.rsu.preauthorize_neighbour(name, res["ticket"])
@@ -830,6 +837,7 @@ class VehicleApp:
         self.fake_ev_tried = False
         self.attack_start = float(cfg.get("attack_start") or 0.0)
         self.ev_heard: dict[int, float] = {}              # emergency sender node -> last accepted alert
+        self.radio_priority = EV_RADIO_PRIORITY if self.emergency and cfg.get("emergency_priority") else None
         credential, index = None, None
         if cfg.get("credential") == "bbs":
             from . import bbs
@@ -1215,7 +1223,7 @@ class VehicleApp:
             self.pending = (rsu, sim_time, "handover")
             # vehicle cost: check the target RSU beacon signature, sign the request
             delay = node.processing_delay("verify_sig") + node.processing_delay("sign")
-            node.send(rsu_node, req, delay=delay)
+            node.send(rsu_node, req, delay=delay, priority=self.radio_priority)
 
     def _verified_beacon(self, rsu: str, beacon: dict, sim_time: float) -> None:
         """Digest/mac mode: only a verified beacon picks MAC tag targets or forces a full ticket,
@@ -1255,7 +1263,8 @@ class VehicleApp:
             return
         self.pending = (rsu, sim_time, "renew")
         # vehicle cost: check the beacon signature, sign the request
-        node.send(rsu_node, req, delay=node.processing_delay("verify_sig") + node.processing_delay("sign"))
+        node.send(rsu_node, req, delay=node.processing_delay("verify_sig") + node.processing_delay("sign"),
+                  priority=self.radio_priority)
 
     def _send_auth(self, node, rsu: str, beacon: dict, sim_time: float, rsu_node: int) -> None:
         before = self.vehicle.current.pid
@@ -1279,7 +1288,7 @@ class VehicleApp:
         if self.vehicle.credential is not None:
             prove = "bbs_prove_online" if self.vehicle.last_proof_precomputed else "bbs_prove"
         delay = node.processing_delay("verify_sig") + node.processing_delay(prove)
-        node.send(rsu_node, req, delay=delay)
+        node.send(rsu_node, req, delay=delay, priority=self.radio_priority)
 
     def _resp(self, node, f: dict, nbytes: int, sim_time: float) -> None:
         if not self.pending or self.pending[0] != f.get("rsu_id"):

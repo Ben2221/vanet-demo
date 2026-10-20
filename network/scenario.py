@@ -173,11 +173,11 @@ class Scenario:
         return DEFAULT_TYPES.get(data[0], f"T{data[0]}") if data else "EMPTY"
 
     # ---------------------------------------------------------------- packets
-    def send(self, h: NodeHandle, dst: int, data: bytes) -> None:
+    def send(self, h: NodeHandle, dst: int, data: bytes, priority: int | None = None) -> None:
         if not h.active:
             return                      # a vehicle that is not on the road has no radio
         mtype = self.msg_type(data)
-        prio = 6 if mtype in HIGH_PRIORITY else 0
+        prio = priority if priority is not None else (6 if mtype in HIGH_PRIORITY else 0)
         expected = None
         if dst == BROADCAST:
             expected = {}
