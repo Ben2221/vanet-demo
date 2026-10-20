@@ -47,6 +47,8 @@ EXPLAIN = {
     "TRUST_UPDATE": "RSUs whose reports were confirmed gain weight in future revocation votes",
 }
 
+QUIET_AFTER = 15     # after this many joins / false flags, only the status line counts them
+
 SHOW = {"AUTH_OK", "ATTACK_START", "DETECT_FLAG", "QUARANTINE_SENT", "REVOKED_VISIBLE", "IDENTITY_REVEALED",
         "AUTH_REJECTED", "ALL_PSEUDONYMS_REVOKED", "LEAVE"}
 SHOW_ALL = SHOW | {"HANDOVER_OK", "HANDOVER_FALLBACK", "RENEW_OK", "REPORT", "PSEUDONYM_CHANGE", "TRUST_UPDATE",
@@ -149,11 +151,14 @@ class Narrator:
         if event == "AUTH_OK":
             first = node not in self.joined
             self.joined.add(node)
-            if not first and self.show is SHOW:
+            if self.show is SHOW and (not first or len(self.joined) > QUIET_AFTER):
+                if len(self.joined) == QUIET_AFTER + 1 and first:
+                    self._p(DIM(f"           (more than {QUIET_AFTER} cars: further joins are counted in the status line)"))
                 return
             self._say(t, node, f"{GREEN('✓ joined')} via {result}: anonymous ticket issued{lat}", event)
         elif event == "LEAVE":
-            self._say(t, node, DIM("left the map"), event)
+            if len(self.joined) <= QUIET_AFTER or self.show is not SHOW:
+                self._say(t, node, DIM("left the map"), event)
         elif event == "ATTACK_START":
             self._say(t, node, RED(f"⚠ ATTACK STARTS ({result})"), event)
         elif event == "DETECT_FLAG":
@@ -163,6 +168,10 @@ class Narrator:
             veh = self.owner.get(result)
             if veh and veh not in self.attackers:
                 self.false_flags.add(veh)
+                if self.show is SHOW and len(self.false_flags) > QUIET_AFTER:
+                    if len(self.false_flags) == QUIET_AFTER + 1:
+                        self._p(DIM(f"           (further single false flags are counted in the status line)"))
+                    return
                 self._say(t, node, YELLOW(f"? flagged {self._who(result)}: a single report, no action"),
                           "FALSE_FLAG")
             else:
@@ -227,7 +236,7 @@ def replay(run: Path, speed: float, show_all: bool) -> None:
     if cfg.exists():
         import json
         c = json.loads(cfg.read_text())
-        print(BOLD(f"Replaying {run}: {c.get('profile') or 'Phase-I'} profile, {c.get('vehicles')} vehicles, "
+        print(BOLD(f"Replaying {run}: {c.get('profile') or 'Phase-I'} profile, {c.get('vehicles_in_trace') or c.get('vehicles')} vehicles, "
                    f"{c.get('duration')} s, {c.get('backend')} backend, attack {c.get('attack')} "
                    f"from {c.get('attack_start')} s ({speed:g}x speed)"))
     start, t0 = time.time(), None
