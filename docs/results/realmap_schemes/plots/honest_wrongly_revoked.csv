@@ -1,0 +1,7 @@
+series,vehicles,honest_reported,honest_reported_ci95
+experiments.baselines.central_auth,60.0,0.3333333333333333,1.4342175765831542
+experiments.baselines.central_auth,120.0,0.0,0.0
+experiments.baselines.ecdsa_pki,60.0,0.3333333333333333,1.4342175765831542
+experiments.baselines.ecdsa_pki,120.0,0.0,0.0
+real,60.0,0.3333333333333333,1.4342175765831542
+real,120.0,0.0,0.0

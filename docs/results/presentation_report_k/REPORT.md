@@ -4,13 +4,13 @@ Mean ± 95 % confidence interval over the seeds. Latencies are simulated time (r
 
 | metric | report_k=1 | report_k=2 | report_k=3 |
 |---|---|---|---|
-| auth latency, median (ms) | 1.96 ± 0.06 | 1.97 ± 0.08 | 1.96 ± 0.05 |
-| auth latency, p95 (ms) | 4.31 ± 3.32 | 4.72 ± 4.40 | 4.49 ± 3.97 |
-| handover latency, median (ms) | 1.59 ± 0.24 | 1.60 ± 0.22 | 1.69 ± 0.33 |
+| auth latency, median (ms) | 1.97 ± 0.07 | 1.97 ± 0.08 | 1.96 ± 0.05 |
+| auth latency, p95 (ms) | 4.31 ± 3.32 | 4.70 ± 4.44 | 4.43 ± 4.11 |
+| handover latency, median (ms) | 1.59 ± 0.22 | 1.59 ± 0.23 | 1.67 ± 0.34 |
 | auth success | 1.000 | 1.000 | 1.000 |
 | handover success | 0.990 ± 0.004 | 0.996 ± 0.009 | 0.994 ± 0.006 |
-| handovers via PREAUTH | 0.31 ± 0.04 | 0.32 ± 0.06 | 0.30 ± 0.08 |
-| BSM PDR | 0.951 ± 0.006 | 0.949 ± 0.007 | 0.948 ± 0.007 |
+| handovers via PREAUTH | 0.31 ± 0.04 | 0.31 ± 0.06 | 0.30 ± 0.09 |
+| BSM PDR | 0.951 ± 0.007 | 0.949 ± 0.007 | 0.948 ± 0.007 |
 | channel busy (RSU) | 0.041 ± 0.003 | 0.042 ± 0.002 | 0.043 ± 0.001 |
 | security bytes / BSM | 145 ± 0 | 145 ± 0 | 145 ± 0 |
 | attackers reported | 0.94 ± 0.24 | 0.94 ± 0.24 | 0.94 ± 0.24 |

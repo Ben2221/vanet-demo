@@ -87,6 +87,15 @@ Open `netanim.xml` in NetAnim to watch the run. ns-3 prints harmless
 
 ## Scenario from a real map
 
+A real city is in the repository: central Monaco from OpenStreetMap (see `mobility/maps/README.md`).
+
+```bash
+python network/run_scenario.py --net mobility/maps/monaco_centre.net.xml --vehicles 100 --protocol real
+python experiments/run.py --config experiments/configs/realmap_schemes.json --jobs 4
+```
+
+Your own city (cut a 1–3 km² centre with `--bbox minlon,minlat,maxlon,maxlat`):
+
 ```bash
 python $SUMO_HOME/tools/osmWebWizard.py           # export an area, gives osm.osm.xml.gz
 python mobility/build_scenario.py --osm path/to/osm.osm.xml.gz --vehicles 150

@@ -1,0 +1,7 @@
+series,vehicles,revocation_rate,revocation_rate_ci95
+experiments.baselines.central_auth,60.0,1.0,0.0
+experiments.baselines.central_auth,120.0,1.0,0.0
+experiments.baselines.ecdsa_pki,60.0,1.0,0.0
+experiments.baselines.ecdsa_pki,120.0,1.0,0.0
+real,60.0,1.0,0.0
+real,120.0,1.0,0.0

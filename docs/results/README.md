@@ -10,6 +10,8 @@ mean ± 95 % CI. Full tables and every figure are in each folder's `REPORT.md`.
 | [`presentation_attacks/`](presentation_attacks/REPORT.md) | `presentation_attacks.json` | Is every attack caught, how fast, with how many false alarms? |
 | [`presentation_report_k/`](presentation_report_k/REPORT.md) | `presentation_report_k.json` | How many RSUs should have to agree before a revocation? |
 | [`presentation_schemes/`](presentation_schemes/REPORT.md) | `presentation_schemes.json` | Ours vs. ECDSA pseudonym certificates vs. a central authority |
+| [`realmap_schemes/`](realmap_schemes/REPORT.md) | `realmap_schemes.json` | The three schemes on a **real city map** (central Monaco) |
+| [`realmap_attacks/`](realmap_attacks/REPORT.md) | `realmap_attacks.json` | All six attacks on the real map, 100 vehicles |
 
 Slides built from these numbers: [`../presentation/vanet_results.pptx`](../presentation/vanet_results.pptx).
 
@@ -19,7 +21,8 @@ Slides built from these numbers: [`../presentation/vanet_results.pptx`](../prese
 |---|---|---|
 | Cryptography | **Real** | Every proof, signature, Merkle check, AES-GCM and Shamir operation actually runs (libsecp256k1 via `coincurve`) on every message; nothing is faked. Processing delays are measured timings (`protocol/compute_times.json`). |
 | Protocol logic and messages | **Real** | The same `protocol/` classes the unit tests use; message sizes are the real encoded bytes. |
-| Road network and traffic | Simulated | SUMO on a synthetic 5×5 grid with random trips. A **real city map** works: `--osm <export>` (see the main README, "Scenario from a real map"). |
+| Road network | **Real** for `realmap_*` | Central Monaco from OpenStreetMap (`mobility/maps/`); the other experiments use a synthetic 5×5 grid. Any city: `--osm <export> --bbox ...` |
+| Traffic | Simulated | SUMO random trips on that road network (not recorded traffic). |
 | Radio | Simulated | The lite 802.11p model for these numbers; **ns-3** (`--backend ns3`) for the final ones. |
 | Ledger | Simulated | An in-memory copy of the chaincode rules with a fixed 500 ms commit. **Real Fabric**: `--ledger http://localhost:3000` (see `ledger/`). |
 | Attacks | Simulated | Injected falsified BSMs (VeReMi-style attack types). Ground truth is known, which is what lets us score detection. |
@@ -70,6 +73,36 @@ Run it yourself: `python experiments/run.py --config experiments/configs/present
 are in `presentation_schemes/plots/`. `python experiments/op_counts.py` prints the operation-count and
 message-size table, plus the papers you list in `experiments/papers_review.csv`, which is how to compare
 with published schemes you cannot simulate.
+
+## On a real city: central Monaco
+
+![Monaco scenario](../figures/monaco_snapshot.png)
+
+1.9 × 2.3 km of central Monaco (Monte-Carlo, the port, Monaco-Ville) built from OpenStreetMap:
+437 junctions, tunnels, hairpins, one-way streets, 27 RSUs. Same protocol, radio and settings as on
+the grid; 3 seeds per setting.
+
+| | Ours, 60 veh | Ours, 120 veh | ECDSA, 60 / 120 | Central, 60 / 120 |
+|---|---|---|---|---|
+| Auth latency, median | 1.96 ms | 2.41 ms | 1.29 / 1.40 ms | 22.2 / 22.3 ms |
+| Handover latency, median | 1.43 ms | 2.16 ms | 1.19 / 1.30 ms | 22.2 / 22.2 ms |
+| Handover success | 98.6 % | 99.0 % | 98.9 / 99.0 % | 98.9 / 99.0 % |
+| BSM delivery ratio | 0.961 | 0.919 | 0.968 / 0.938 | 0.968 / 0.939 |
+| Channel busy at RSUs | 2.3 % | 3.9 % | 1.8 / 3.1 % | 1.8 / 3.1 % |
+
+All six attacks, 100 vehicles: **100 % of attackers reported and revoked** for every attack type
+(including `const_pos`, which reached only 67 % on the grid: with 27 RSUs a liar is almost always seen
+by two of them). First lying BSM → report: 0.16–1.1 s. Report → revocation: 0.7 s
+(`const_pos` 12 s). **0 honest vehicles revoked.**
+
+**What the real map revealed.** Monaco's hairpins and dead ends make SUMO's cars turn around; with
+1 s position samples a 180° turn appears within one step, and the `heading` check flags a few honest
+cars (0.7 per run at 60 vehicles, 1.7 at 120). It is the same for all three schemes, because they share
+the detector: it is a property of the detector and the map, not of the protocol. K-of-W reporting and
+the two-RSU rule stopped every one: one honest car was reported once by a single RSU in one seed, and
+none was revoked. The detector was **not** retuned on this data; that would be fitting the
+thresholds to the evaluation set. Two fixes for the final report: the `veremi` threshold profile with
+0.1 s mobility (`--traci-step 0.1`), or treating `heading` as a weak check.
 
 ## Headline numbers (60 vehicles, 10 % attackers)
 
@@ -134,7 +167,9 @@ python experiments/run.py --config experiments/configs/compare_bsm_ticket.json -
 python experiments/run.py --config experiments/configs/presentation_attacks.json --jobs 4
 python experiments/run.py --config experiments/configs/presentation_report_k.json --jobs 4
 python experiments/run.py --config experiments/configs/presentation_schemes.json --jobs 4
-python experiments/export_results.py compare_bsm_ticket presentation_attacks presentation_report_k presentation_schemes
+python experiments/run.py --config experiments/configs/realmap_schemes.json --jobs 4
+python experiments/run.py --config experiments/configs/realmap_attacks.json --jobs 4
+python experiments/export_results.py compare_bsm_ticket presentation_attacks presentation_report_k presentation_schemes realmap_schemes realmap_attacks
 cd docs/presentation && npm install pptxgenjs && node build_deck.js
 ```
 

@@ -1,0 +1,7 @@
+series,vehicles,ledger_commit_ms_median,ledger_commit_ms_median_ci95
+experiments.baselines.central_auth,60.0,501.9921666666667,5.249137041137197
+experiments.baselines.central_auth,120.0,500.075,3.425263802929346
+experiments.baselines.ecdsa_pki,60.0,501.9921666666667,5.249137041137197
+experiments.baselines.ecdsa_pki,120.0,500.075,3.425263802929346
+real,60.0,500.74316666666664,4.598673401395963
+real,120.0,499.7045,4.46040519172398

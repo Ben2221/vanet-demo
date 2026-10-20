@@ -179,7 +179,8 @@ these as processing delays (`node.processing_delay(op)`).
 
 ## 6. The simulation
 
-* **Mobility:** SUMO on a 5×5 grid, 250 m blocks (1 km²), random trips, 1 s samples;
+* **Mobility:** SUMO on a 5×5 grid, 250 m blocks (1 km²), or **central Monaco from OpenStreetMap**
+  (`mobility/maps/monaco_centre.net.xml`, 27 RSUs), random trips, 1 s samples;
   converted to an ns-2 trace that parks inactive vehicles 3 km outside the map.
 * **RSUs:** grid of 450 m snapped to roads → 9 RSUs, 300 m service range.
 * **Radio:** IEEE 802.11p, 10 MHz, 6 Mb/s, 20 dBm, −85 dBm sensitivity (≈ 400 m range),
@@ -250,6 +251,9 @@ Results for these changes are in [`docs/results/README.md`](results/README.md).
 * **Lite backend vs ns-3.** Final numbers should come from ns-3 (`--backend ns3`, Docker on
   Windows); the lite backend is calibrated to the same range (tests check 100/300 m arrive,
   450 m fail) but has a simpler MAC.
+* **Real-map false flags.** On central Monaco (OSM) the `heading` check flags a few honest cars at
+  hairpins and U-turns (1 s mobility samples make a turnaround look instantaneous). K-of-W and the
+  two-RSU rule stop them: 0 honest vehicles revoked. See `docs/results/README.md`.
 * **Linkability at pseudonym change** by the RSU that sees it (section 3, step 6).
 * **Baselines** reuse the stand-in message flow and model sizes, compute costs and round trips,
   not certificate expiry or queueing at a central authority.
