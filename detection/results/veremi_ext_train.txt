@@ -1,0 +1,54 @@
+source: /mnt/ssd/Downloads/btp_full/datasets/veremi_ext/mixalldata_clean.csv   train msgs 220587   test msgs 100207
+
+RULES
+attack         precision  recall      F1     FPR       n
+const_pos          1.000   0.640   0.781  0.0000    1267
+const_pos_offset     0.000   0.000   0.000  0.0000     856
+const_speed        1.000   0.960   0.980  0.0000    1225
+const_speed_offset     1.000   0.480   0.648  0.0000     957
+delayed_messages     1.000   0.008   0.015  0.0000    1304
+disruptive         1.000   0.873   0.932  0.0000     942
+dos                1.000   0.023   0.044  0.0000    5056
+dos_disruptive     1.000   0.990   0.995  0.0000    3927
+dos_disruptive_sybil     0.000   0.000   0.000  0.0000    2993
+dos_random         1.000   0.997   0.999  0.0000    4182
+dos_random_sybil     0.000   0.000   0.000  0.0000    2349
+eventual_stop      0.000   0.000   0.000  0.0000    1329
+grid_sybil         1.000   0.977   0.989  0.0000    4284
+random_pos         1.000   0.991   0.995  0.0000    1425
+random_pos_offset     1.000   0.861   0.925  0.0000    1145
+random_speed       1.000   0.938   0.968  0.0000    1575
+random_speed_offset     1.000   0.226   0.369  0.0000    1246
+replay             1.000   0.543   0.704  0.0000    1047
+replay_sybil       1.000   0.157   0.272  0.0000     337
+ALL                1.000   0.545   0.706  0.0000   37446
+
+RANDOM FOREST
+attack         precision  recall      F1     FPR       n
+const_pos          0.768   0.994   0.867  0.0061    1267
+const_pos_offset     0.016   0.007   0.010  0.0061     856
+const_speed        0.763   0.998   0.865  0.0061    1225
+const_speed_offset     0.705   0.948   0.808  0.0061     957
+delayed_messages     0.660   0.567   0.610  0.0061    1304
+disruptive         0.694   0.913   0.788  0.0061     942
+dos                0.930   0.999   0.963  0.0061    5056
+dos_disruptive     0.912   0.999   0.954  0.0061    3927
+dos_disruptive_sybil     0.886   0.984   0.932  0.0061    2993
+dos_random         0.917   1.000   0.957  0.0061    4182
+dos_random_sybil     0.861   1.000   0.925  0.0061    2349
+eventual_stop      0.734   0.790   0.761  0.0061    1329
+grid_sybil         0.918   0.991   0.953  0.0061    4284
+random_pos         0.788   0.994   0.879  0.0061    1425
+random_pos_offset     0.746   0.975   0.845  0.0061    1145
+random_speed       0.806   1.000   0.892  0.0061    1575
+random_speed_offset     0.761   0.974   0.855  0.0061    1246
+replay             0.672   0.744   0.706  0.0061    1047
+replay_sybil       0.383   0.700   0.495  0.0061     337
+ALL                0.989   0.937   0.962  0.0061   37446
+
+top features: speed_err 0.24, speed_err_cur 0.20, implied_speed 0.10, implied_base 0.09, dt 0.08, sybil 0.07, rate 0.05, pos_speed 0.05
+
+rules: 138/207 attacker vehicles reported, 0/558 honest vehicles reported, median delay 3.0
+
+random_forest: 186/207 attacker vehicles reported, 2/558 honest vehicles reported, median delay 2.0
+WALL 44.33 s RSS 1319104 KB

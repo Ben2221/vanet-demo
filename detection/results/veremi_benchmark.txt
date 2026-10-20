@@ -1,0 +1,13 @@
+959425 messages, 7494 vehicles featurised in 99 s
+split 0: rules F1 0.731, rf F1 0.951, hgb F1 0.952, hgb_window F1 0.963, hgb_window_calibrated F1 0.963
+split 1: rules F1 0.697, rf F1 0.948, hgb F1 0.949, hgb_window F1 0.959, hgb_window_calibrated F1 0.959
+split 2: rules F1 0.709, rf F1 0.954, hgb F1 0.954, hgb_window F1 0.966, hgb_window_calibrated F1 0.966
+split 3: rules F1 0.741, rf F1 0.955, hgb F1 0.956, hgb_window F1 0.964, hgb_window_calibrated F1 0.964
+split 4: rules F1 0.714, rf F1 0.950, hgb F1 0.951, hgb_window F1 0.962, hgb_window_calibrated F1 0.962
+rules       F1 0.718 ± 0.022  FPR 0.0000  attackers reported 0.638  honest reported 0.0/1557
+rf          F1 0.952 ± 0.004  FPR 0.0043  attackers reported 0.867  honest reported 1.2/1557
+hgb         F1 0.952 ± 0.003  FPR 0.0027  attackers reported 0.867  honest reported 2.8/1557
+hgb_window  F1 0.963 ± 0.003  FPR 0.0018  attackers reported 0.870  honest reported 14.2/1557
+hgb_window_calibrated F1 0.963 ± 0.003  FPR 0.0018  attackers reported 0.870  honest reported 13.2/1557
+-> /mnt/ssd/Downloads/btp_full/vanet-demo/detection/results/veremi_benchmark.json
+WALL 429.38 s RSS 3240620 KB

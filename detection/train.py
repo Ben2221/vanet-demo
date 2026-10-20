@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 
 from detection import detector as det
-from detection.evaluate import format_table, per_attack_metrics, run_detector
+from detection.evaluate import format_table, per_attack_metrics, run_detector, vehicle_metrics
 from detection.generator import generate
 from detection.loaders import load, split_by_vehicle
 
@@ -41,14 +41,19 @@ def main(argv=None) -> dict:
     ap.add_argument("--trees", type=int, default=100)
     ap.add_argument("--out", default=str(det.MODEL_PATH))
     ap.add_argument("--metrics", default=None, help="write the per-attack metrics to this JSON file")
+    ap.add_argument("--sample", type=float, default=1.0,
+                    help="keep this fraction of the sender vehicles of --data (memory; VeReMi Extension has 3.2 M messages)")
+    ap.add_argument("--profile", default=None, help="detector profile: 'scenario' (default) or 'veremi' (physical datasets)")
     a = ap.parse_args(argv)
+    if a.profile:
+        det.use_profile(a.profile)
 
     from sklearn.ensemble import RandomForestClassifier
     import joblib
 
     if a.data:
-        train_raw = load(a.data)
-        test_raw = load(a.test_data) if a.test_data else None
+        train_raw = load(a.data, sample=a.sample)
+        test_raw = load(a.test_data, sample=a.sample) if a.test_data else None
         if test_raw is None:
             train_raw, test_raw = split_by_vehicle(train_raw, seed=a.seed)
         source = a.data
@@ -77,7 +82,15 @@ def main(argv=None) -> dict:
     print("\nRANDOM FOREST"); print(format_table(ml_m))
     imp = sorted(zip(det.FEATURES, model.feature_importances_), key=lambda p: -p[1])[:8]
     print("\ntop features:", ", ".join(f"{n} {v:.2f}" for n, v in imp))
-    out = {"source": source, "rules": rule_m, "random_forest": ml_m, "features": det.FEATURES}
+    # vehicle level: the K-of-W reporting rule the RSUs use, on the rules' and the forest's flags
+    veh = {"rules": vehicle_metrics(test), "random_forest": vehicle_metrics(ml_results)}
+    for name, v in veh.items():
+        print(f"\n{name}: {v['detected']}/{v['attackers']} attacker vehicles reported, "
+              f"{v['honest_reported']}/{v['honest']} honest vehicles reported, median delay {v['delay_s_median']}")
+    out = {"source": source, "sample": a.sample, "profile": a.profile or "scenario",
+           "train_messages": len(train), "test_messages": len(test),
+           "train_vehicles": len({r["vehicle"] for r in train}), "test_vehicles": len({r["vehicle"] for r in test}),
+           "rules": rule_m, "random_forest": ml_m, "vehicles": veh, "features": det.FEATURES}
     if a.metrics:
         Path(a.metrics).parent.mkdir(parents=True, exist_ok=True)
         Path(a.metrics).write_text(json.dumps(out, indent=2))

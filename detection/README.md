@@ -76,6 +76,32 @@ Things for Person 3 / Person 1 to look at (not changed by me):
    receive position in `fields["rsu_x"], fields["rsu_y"]`: that switches on the replay-by-copy, sybil and range
    checks. Messages with `features["foreign"] == 1` must not count towards the pseudonym's window.
 
+## Results on VeReMi Extension (real benchmark data)
+
+`detection/get_veremi.sh` downloads VeReMi Extension (Kamel et al. 2020; the combined labelled
+CSV of the 39 LuST simulations, Mendeley Data DOI 10.17632/k62n4z9gdz.1, 3,194,808 messages,
+19 attack types). `python -m detection.benchmark` (= `make detector-benchmark`) replays 30 % of the
+sender vehicles (~6,500) in reception order, splits BY VEHICLE 70/30 five times and writes
+`results/veremi_benchmark.json`:
+
+| Model | F1 (mean ± 95 % CI) | message FPR | attacker vehicles reported (K=3 of W=10) |
+|---|---|---|---|
+| rules (`check`, "veremi" profile) | 0.718 ± 0.022 | 0 % | 64 % (0 honest) |
+| Random Forest | 0.952 ± 0.004 | 0.43 % | 87 % |
+| HistGradientBoosting | 0.952 ± 0.003 | 0.27 % | 87 % |
+| HistGradientBoosting + window features (last 10 messages) | **0.963 ± 0.003** | 0.18 % | 87 % |
+
+Per attack (gradient boosting + window): 0.95-0.99 F1 for the position, speed, DoS, Sybil and
+replay attacks; delayed messages 0.72, eventual stop 0.87, replay-Sybil 0.91; constant
+position *offset* is not detectable from kinematics (0.003). The data has no receiver positions
+or receive times, so the range, appearance and signal-strength checks cannot fire on it.
+
+**In the simulator** (`--rssi-check`): the RSU also estimates the sender's distance from
+received power, which catches position offsets that kinematics cannot. A model trained on
+simulator data (`detection/train_sim.py`, grid scenarios with all six attacks, `--detector-log`)
+did not transfer to LuST (it reported honest vehicles), so the v3 profiles use the rules plus
+the signal-strength check; `--detector-mode hybrid` is in the ablation only.
+
 ## What is verified, and what is not
 
 * Unit tests (22) pass; detector, reporting rule, generator, loaders.
