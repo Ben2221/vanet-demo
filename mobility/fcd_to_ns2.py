@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -40,13 +39,16 @@ class Track:
     # (time, x, y, speed, angle)
 
 
-def read_fcd(fcd_path: Path, end_time: float | None = None) -> dict[str, Track]:
+def read_fcd(fcd_path: Path, end_time: float | None = None, time_offset: float = 0.0) -> dict[str, Track]:
+    """``time_offset`` is subtracted from every time (a window cut from a 24 h scenario
+    starts at 0); ``end_time`` is in the file's own time."""
+    from defusedxml.ElementTree import iterparse     # FCD of third-party scenarios too
     tracks: dict[str, Track] = {}
-    for _, elem in ET.iterparse(fcd_path, events=("end",)):
+    for _, elem in iterparse(fcd_path, events=("end",)):
         if elem.tag != "timestep":
             continue
         t = float(elem.get("time"))
-        if end_time is not None and t > end_time:
+        if end_time is not None and t > end_time + 1e-6:
             elem.clear()
             break
         for veh in elem.findall("vehicle"):
@@ -55,7 +57,7 @@ def read_fcd(fcd_path: Path, end_time: float | None = None) -> dict[str, Track]:
             if tr is None:
                 tr = tracks[vid] = Track(vid)
             tr.samples.append(
-                (t, float(veh.get("x")), float(veh.get("y")),
+                (round(t - time_offset, 3), float(veh.get("x")), float(veh.get("y")),
                  float(veh.get("speed", 0.0)), float(veh.get("angle", 0.0)))
             )
         elem.clear()
@@ -86,7 +88,11 @@ def write_ns2(tracks: list[Track], out_path: Path, step: float) -> None:
             if dist < 1e-3 or dt <= 0:
                 continue  # standing still: the previous setdest already stopped the node
             if dt > step * 1.5:
-                # gap in the trace (should not happen): jump instead of crawling
+                # gap: the vehicle left the recorded area (or the trace has a hole). Park it
+                # meanwhile, so it is not a ghost at the border, and bring it back at tb.
+                px, py = park_position(nid)
+                lines.append(f'$ns_ at {ta + step:.2f} "$node_({nid}) set X_ {px:.2f}"')
+                lines.append(f'$ns_ at {ta + step:.2f} "$node_({nid}) set Y_ {py:.2f}"')
                 lines.append(f'$ns_ at {tb:.2f} "$node_({nid}) set X_ {xb:.2f}"')
                 lines.append(f'$ns_ at {tb:.2f} "$node_({nid}) set Y_ {yb:.2f}"')
                 continue
@@ -111,8 +117,9 @@ def write_node_map(tracks: list[Track], out_path: Path, step: float) -> None:
 
 
 def convert(fcd_path: Path, out_dir: Path, step: float = 1.0,
-            end_time: float | None = None, max_vehicles: int | None = None) -> int:
-    tracks = ordered_tracks(read_fcd(fcd_path, end_time))
+            end_time: float | None = None, max_vehicles: int | None = None,
+            time_offset: float = 0.0) -> int:
+    tracks = ordered_tracks(read_fcd(fcd_path, end_time, time_offset))
     if max_vehicles is not None:
         tracks = tracks[:max_vehicles]
     out_dir.mkdir(parents=True, exist_ok=True)

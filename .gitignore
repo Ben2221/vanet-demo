@@ -12,3 +12,7 @@ experiments/results/
 *.xml.gz
 netanim.xml
 flowmon.xml
+
+# real-world datasets (downloaded by mobility/get_lust.sh and detection/get_veremi.sh)
+mobility/real/
+detection/data/

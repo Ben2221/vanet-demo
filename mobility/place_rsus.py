@@ -20,13 +20,16 @@ from pathlib import Path
 from mobility.sumo_env import add_tools_to_path
 
 
-def place(net_file: Path, spacing: float) -> list[tuple[float, float]]:
+def place(net_file: Path, spacing: float,
+          bounds: tuple[float, float, float, float] | None = None) -> list[tuple[float, float]]:
+    """``bounds`` (xmin, ymin, xmax, ymax) limits the grid to part of the network
+    (a box cut from a city scenario); default: the whole network."""
     add_tools_to_path()
     import sumolib
     from sumolib import geomhelper
 
     net = sumolib.net.readNet(str(net_file))
-    xmin, ymin, xmax, ymax = net.getBoundary()
+    xmin, ymin, xmax, ymax = bounds or net.getBoundary()
     nx = max(1, int(math.floor((xmax - xmin) / spacing)) + 1)
     ny = max(1, int(math.floor((ymax - ymin) / spacing)) + 1)
     # centre the grid on the map
