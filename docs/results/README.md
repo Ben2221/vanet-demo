@@ -10,6 +10,8 @@ mean ± 95 % CI. Full tables and every figure are in each folder's `REPORT.md`.
 | [`presentation_attacks/`](presentation_attacks/REPORT.md) | `presentation_attacks.json` | Is every attack caught, how fast, with how many false alarms? |
 | [`presentation_report_k/`](presentation_report_k/REPORT.md) | `presentation_report_k.json` | How many RSUs should have to agree before a revocation? |
 | [`presentation_schemes/`](presentation_schemes/REPORT.md) | `presentation_schemes.json` | Ours vs. ECDSA pseudonym certificates vs. a central authority |
+| [`final_schemes/`](final_schemes/REPORT.md) | `final_schemes.json` | **ns-3 + real Hyperledger Fabric**: the three schemes, 30/60/90 vehicles |
+| [`final_attacks/`](final_attacks/REPORT.md) | `final_attacks.json` | **ns-3 + real Hyperledger Fabric**: all six attacks, 60 vehicles |
 | [`realmap_schemes/`](realmap_schemes/REPORT.md) | `realmap_schemes.json` | The three schemes on a **real city map** (central Monaco) |
 | [`realmap_attacks/`](realmap_attacks/REPORT.md) | `realmap_attacks.json` | All six attacks on the real map, 100 vehicles |
 
@@ -23,8 +25,8 @@ Slides built from these numbers: [`../presentation/vanet_results.pptx`](../prese
 | Protocol logic and messages | **Real** | The same `protocol/` classes the unit tests use; message sizes are the real encoded bytes. |
 | Road network | **Real** for `realmap_*` | Central Monaco from OpenStreetMap (`mobility/maps/`); the other experiments use a synthetic 5×5 grid. Any city: `--osm <export> --bbox ...` |
 | Traffic | Simulated | SUMO random trips on that road network (not recorded traffic). |
-| Radio | Simulated | The lite 802.11p model for these numbers; **ns-3** (`--backend ns3`) for the final ones. |
-| Ledger | Simulated | An in-memory copy of the chaincode rules with a fixed 500 ms commit. **Real Fabric**: `--ledger http://localhost:3000` (see `ledger/`). |
+| Radio | **ns-3** for `final_*` | ns-3 802.11p; the other experiments use the lite model with the same parameters. |
+| Ledger | **Real Fabric** for `final_*` | Hyperledger Fabric 2.5.9 through the gateway; the other experiments use an in-memory copy of the chaincode rules with a fixed 500 ms commit. |
 | Attacks | Simulated | Injected falsified BSMs (VeReMi-style attack types). Ground truth is known, which is what lets us score detection. |
 | Detector evaluation on a dataset | Not yet | The VeReMi / NextGen loader exists (`detection/loaders.py`) but the dataset has not been run. |
 
@@ -73,6 +75,45 @@ Run it yourself: `python experiments/run.py --config experiments/configs/present
 are in `presentation_schemes/plots/`. `python experiments/op_counts.py` prints the operation-count and
 message-size table, plus the papers you list in `experiments/papers_review.csv`, which is how to compare
 with published schemes you cannot simulate.
+
+## Final numbers: ns-3 + real Hyperledger Fabric
+
+The full stack: the ns-3 802.11p radio, the real protocol, and the `vanetauth` chaincode on a Fabric
+2.5.9 network (2 organisations, Raft orderer, 500 ms batch timeout, TA + 9 RSU identities) behind the
+REST gateway. Grid scenario, 120 s, 10 % attackers, 3 seeds per setting, 45 runs, **0 ledger errors**.
+Setup and the problems we fixed on the way: [`../NS3_FABRIC_SETUP.md`](../NS3_FABRIC_SETUP.md).
+
+| | Ours, 30 / 60 / 90 veh | ECDSA, 60 veh | Central, 60 veh |
+|---|---|---|---|
+| Auth latency, median | 1.54 / 1.61 / 1.63 ms | 1.08 ms | 21.9 ms |
+| Auth latency, p95 | 2.77 / 2.76 / 4.90 ms | 2.50 ms | 22.8 ms |
+| Handover latency, median | 1.05 / 1.06 / 1.09 ms | 0.95 ms | 21.8 ms |
+| Handover success | 98.3 / 98.6 / 98.3 % | 98.6 % | 98.8 % |
+| Handovers accepted via PREAUTH (before the Fabric commit was visible) | 41 / 40 / 41 % | – | – |
+| BSM delivery ratio (ns-3) | 0.996 / 0.991 / 0.986 | 0.992 | 0.992 |
+| Channel busy at RSUs (ns-3 PHY) | 4.8 / 8.3 / 11.6 % | 6.7 % | 6.7 % |
+| **Fabric commit time, median / p95** | 304–373 ms / 547–553 ms | 331 / 597 ms | 321 / 1185 ms |
+| Attackers reported / revoked | 100 / 100 % | 100 / 100 % | 100 / 100 % |
+| First lie → identity revealed, all pseudonyms revoked | 2.5 / 3.9 / 5.1 s | 4.0 s | 4.0 s |
+| Honest vehicles revoked | 0 | 0 | 0 |
+
+All six attacks (`final_attacks`, 60 vehicles): every attack type reported and revoked, except
+`const_pos` (94 % reported, 67 % revoked within 120 s, the same two-RSU limit as with the lite radio);
+first lying BSM → report 0.16–1.1 s; report → revocation on Fabric 2.3–2.4 s (`const_pos` 10.5 s);
+0 honest vehicles flagged.
+
+**What changed compared with the lite radio and the simulated ledger:**
+* ns-3 delivers more BSMs (0.99 vs 0.95) and measures a higher channel busy ratio (8.3 % vs 4.1 % at
+  60 vehicles): its PHY counts preambles and carrier sensing that the lite model leaves out.
+  Authentication is ~0.4 ms faster.
+* Real Fabric commits in **~350 ms median, ~550 ms p95**, not the fixed 500 ms the simulated ledger
+  assumed: a write that arrives during the 500 ms batch window waits only for the rest of it.
+  The baselines' p95 is higher (up to 1.9 s) because their RSUs write the same pseudonym's record
+  concurrently at handover and Fabric serialises those writes (MVCC retries).
+* PREAUTH matters more on real Fabric: ~40 % of handovers were accepted before the ledger record was
+  visible (31 % with the simulated ledger).
+* Real Fabric enforces rules the simulated ledger did not (an approved trace for a revocation, one
+  write per key per block); that exposed three client bugs, now fixed and listed in the setup doc.
 
 ## On a real city: central Monaco
 

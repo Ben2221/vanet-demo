@@ -180,6 +180,37 @@ const mid = dig.find((r) => r.vehicles === 60) || dig[0] || {};
   caption(s, "Lite 802.11p backend, mock ledger (500 ms commit), 120 s runs, mean of 3 seeds. Source: docs/results/.");
 }
 
+// ------------------------------------------------------------------ 6b ns-3 + Fabric
+{
+  const fs_ = rows("final_schemes"), fa = rows("final_attacks");
+  const at = (p, v) => fs_.find((r) => r.protocol === p && r.vehicles === v) || {};
+  const ours = at("real", 60), ec = at("experiments.baselines.ecdsa_pki", 60), ca = at("experiments.baselines.central_auth", 60);
+  const s = pres.addSlide({ masterName: "CONTENT" });
+  title(s, "Final run: ns-3 radio and real Hyperledger Fabric");
+  const stats = [
+    [f(ours.ledger_commit_ms_median, 0) + " ms", "Fabric commit, median (p95 " + f(ours.ledger_commit_ms_p95, 0) + " ms)"],
+    [f(ours.auth_ms_median, 2) + " ms", "authentication latency, median"],
+    [f(100 * ours.handover_via_preauth, 0) + " %", "handovers accepted before the ledger record was visible (PREAUTH)"],
+    [f(ours.attack_to_exclusion_s_mean, 1) + " s", "first lie to identity revealed and all pseudonyms revoked"],
+  ];
+  stats.forEach(([v, l], i) => {
+    const x = 0.6 + i * 3.08;
+    s.addText(v, { x, y: 1.5, w: 2.9, h: 1.0, fontFace: HEAD, fontSize: 40, bold: true, color: INK, isTextBox: true, margin: 0 });
+    s.addText(l, { x, y: 2.5, w: 2.8, h: 0.9, fontSize: 14, color: MUTED, isTextBox: true, margin: 0, valign: "top" });
+  });
+  const hdr = (t) => ({ text: t, options: { bold: true, color: WHITE, fill: { color: INK } } });
+  s.addTable([
+    [hdr("60 vehicles, 3 seeds"), hdr("Ours"), hdr("ECDSA"), hdr("Central")],
+    ["Auth / handover latency, median", `${f(ours.auth_ms_median, 2)} / ${f(ours.handover_ms_median, 2)} ms`, `${f(ec.auth_ms_median, 2)} / ${f(ec.handover_ms_median, 2)} ms`, `${f(ca.auth_ms_median, 1)} / ${f(ca.handover_ms_median, 1)} ms`],
+    ["BSM delivery / channel busy", `${f(ours.pdr, 3)} / ${f(100 * ours.cbr_rsu_mean, 1)} %`, `${f(ec.pdr, 3)} / ${f(100 * ec.cbr_rsu_mean, 1)} %`, `${f(ca.pdr, 3)} / ${f(100 * ca.cbr_rsu_mean, 1)} %`],
+    ["Attackers reported / revoked, honest revoked", `${f(100 * ours.detection_rate, 0)} / ${f(100 * ours.revocation_rate, 0)} %, ${f(ours.honest_revoked, 0)}`, `${f(100 * ec.detection_rate, 0)} / ${f(100 * ec.revocation_rate, 0)} %, ${f(ec.honest_revoked, 0)}`, `${f(100 * ca.detection_rate, 0)} / ${f(100 * ca.revocation_rate, 0)} %, ${f(ca.honest_revoked, 0)}`],
+  ], { x: 0.6, y: 3.65, w: 12.1, colW: [4.3, 2.6, 2.6, 2.6], fontFace: BODY, fontSize: 14, color: INK,
+    border: { type: "solid", color: GRID, pt: 0.75 }, fill: { color: WHITE }, rowH: 0.5, valign: "middle" });
+  s.addText(`All six attacks on Fabric: ${fa.filter((r) => r.revocation_rate === 1).length} of ${fa.length} types fully revoked (const_pos 67 %, the two-RSU rule); 0 honest vehicles revoked; 45 runs, 0 ledger errors.`,
+    { x: 0.6, y: 5.85, w: 12.1, h: 0.6, fontSize: 14, color: INK, isTextBox: true, margin: 0 });
+  caption(s, "Fabric 2.5.9, 2 organisations, Raft orderer, 500 ms batch timeout, TA + 9 RSU identities; ns-3 802.11p; grid, 120 s, 10 % attackers.");
+}
+
 // ------------------------------------------------------------------ 7 latency vs density
 {
   const s = pres.addSlide({ masterName: "CONTENT" });
@@ -334,9 +365,9 @@ const mid = dig.find((r) => r.vehicles === 60) || dig[0] || {};
   const s = pres.addSlide({ masterName: "CONTENT" });
   title(s, "Limitations and next steps");
   card(s, 0.6, 1.55, 5.9, 3.9, "Limitations we state up front",
-    "Mock ledger commit time is a setting (500 ms); Fabric numbers come from the gateway benchmark.\n\nLite radio for these runs; final numbers with ns-3.\n\nDetector tuned on generated data; VeReMi NextGen not yet run.\n\nThe RSU that sees a pseudonym change can link old and new pid.", RED);
+    "Traffic is SUMO random trips (real roads for Monaco, not recorded traffic).\n\nDetector tuned on generated data; VeReMi NextGen not yet run; heading check fires at real-map U-turns.\n\nconst_pos seen by one RSU only is reported but not revoked (the two-RSU rule).\n\nThe RSU that sees a pseudonym change can link old and new pid.", RED);
   card(s, 6.8, 1.55, 5.9, 3.9, "Next steps",
-    "Run the same configs with --backend ns3 and --ledger on real Fabric.\n\nEvaluate the detector on VeReMi NextGen test split.\n\nRSSI / angle-of-arrival check for constant-offset attacks.\n\nCompare against ECDSA certificates and a central authority (compare_schemes.json).", TEAL);
+    "Evaluate the detector on the VeReMi NextGen test split.\n\nRSSI / angle-of-arrival check for constant-offset attacks.\n\nMonaco on ns-3 + Fabric (27 RSUs needs a chaincode trace threshold above 10).\n\nFabric throughput at city scale (more peers, more organisations).", TEAL);
 }
 
 // ------------------------------------------------------------------ 13 close

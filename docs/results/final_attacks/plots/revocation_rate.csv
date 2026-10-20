@@ -1,0 +1,7 @@
+series,attack,revocation_rate,revocation_rate_ci95
+,const_pos,0.6666666666666666,0.0
+,const_speed,1.0,0.0
+,flood,1.0,0.0
+,random_pos,1.0,0.0
+,random_speed,1.0,0.0
+,sudden_stop,1.0,0.0

@@ -1,0 +1,10 @@
+series,vehicles,handover_via_preauth,handover_via_preauth_ci95
+experiments.baselines.central_auth,30.0,0.0,0.0
+experiments.baselines.central_auth,60.0,0.0,0.0
+experiments.baselines.central_auth,90.0,0.0,0.0
+experiments.baselines.ecdsa_pki,30.0,0.0,0.0
+experiments.baselines.ecdsa_pki,60.0,0.0,0.0
+experiments.baselines.ecdsa_pki,90.0,0.0,0.0
+real,30.0,0.40768794319232704,0.09438022042240538
+real,60.0,0.3994228095897933,0.04154342230131201
+real,90.0,0.40855293013668076,0.11224270212734025

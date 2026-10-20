@@ -1,0 +1,7 @@
+series,attack,honest_flagged,honest_flagged_ci95
+,const_pos,0.0,0.0
+,const_speed,0.0,0.0
+,flood,0.0,0.0
+,random_pos,0.0,0.0
+,random_speed,0.0,0.0
+,sudden_stop,0.0,0.0

@@ -246,11 +246,10 @@ Results for these changes are in [`docs/results/README.md`](results/README.md).
   Remedies: RSU angle-of-arrival / RSSI-vs-distance checks, cooperation between neighbouring RSUs.
 * **Detector numbers on generated data are optimistic.** The VeReMi NextGen loader exists but
   has not been checked against the real dataset (see `detection/README.md`).
-* **Mock ledger commit time is a setting (500 ms), not a measurement.** Real Fabric numbers come
-  from `ledger/bench/load.js` and `--ledger http://...`.
-* **Lite backend vs ns-3.** Final numbers should come from ns-3 (`--backend ns3`, Docker on
-  Windows); the lite backend is calibrated to the same range (tests check 100/300 m arrive,
-  450 m fail) but has a simpler MAC.
+* **Which numbers are fully real.** `docs/results/final_*` ran on ns-3 and a real Fabric 2.5.9
+  network (measured commit ~350 ms median, ~550 ms p95). The other result sets use the lite radio
+  (same range, simpler MAC: lower PDR, lower channel busy ratio) and an in-memory ledger whose 500 ms
+  commit time is a setting. Fabric ran on one machine; a wide-area deployment adds network latency.
 * **Real-map false flags.** On central Monaco (OSM) the `heading` check flags a few honest cars at
   hairpins and U-turns (1 s mobility samples make a turnaround look instantaneous). K-of-W and the
   two-RSU rule stop them: 0 honest vehicles revoked. See `docs/results/README.md`.
