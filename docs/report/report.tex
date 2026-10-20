@@ -1,0 +1,172 @@
+\documentclass[12pt,a4paper]{report}
+
+% Layout follows the IIIT Kottayam BTP report template (12 pt, 1.5 spacing, title page,
+% declaration, certificate). The template's play/pstcol/xy packages are not needed here.
+\usepackage[a4paper,left=1.25in,right=1in,top=1in,bottom=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathrsfs,setspace}
+\usepackage{graphicx,booktabs,array,multirow,caption,subcaption,xcolor}
+\usepackage[nottoc]{tocbibind}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\emergencystretch=2em
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=4pt}
+\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\renewcommand{\baselinestretch}{1.5}
+
+% ---------------------------------------------------------------- project data
+\newcommand{\projecttitle}{Privacy-Preserving Authentication and Authorization for VANETs Using Blockchain and Zero-Knowledge Proofs}
+\newcommand{\reportdate}{November 2026}
+\newcommand{\guide}{Dr. Deepak Jose}
+
+% Measured numbers come from experiments/thesis_data.py (generated/numbers.tex):
+% \R{key}{metric}, e.g. \R{cmp/v3-fast}{ticket_ms_mean}. A missing one prints a bold ??.
+\makeatletter
+\newcommand{\R}[2]{\ifcsname r@#1@#2\endcsname\csname r@#1@#2\endcsname\else\textbf{??}\fi}
+\makeatother
+\InputIfFileExists{generated/numbers.tex}{}{}
+% a figure from generated/fig, or a visible placeholder while its sweep is pending
+\newcommand{\genfig}[2][0.8\textwidth]{%
+  \noindent\IfFileExists{generated/fig/#2.pdf}{\includegraphics[width=#1]{generated/fig/#2.pdf}}%
+  {\fbox{\parbox[c][4cm][c]{\dimexpr#1-2\fboxsep-2\fboxrule}{\centering\small Figure pending:
+  \texttt{\detokenize{#2}}\\(make evaluate-all, then thesis\_data.py)}}}}
+\newcommand{\gentab}[1]{\InputIfFileExists{generated/#1.tex}{}{\fbox{Table pending: #1}}}
+
+\begin{document}
+
+% --------------- Title page -----------------------
+\pagenumbering{Alph}
+\begin{titlepage}
+\enlargethispage{2cm}
+\begin{center}
+\vspace*{-1cm}
+\textbf{\Large PRIVACY-PRESERVING AUTHENTICATION AND AUTHORIZATION FOR VANETS USING BLOCKCHAIN AND ZERO-KNOWLEDGE PROOFS}\\[10pt]
+\vspace*{1.2cm}
+A Project Report Submitted \\
+in Partial Fulfilment of the Requirements \\
+for the Degree of \\
+\vspace{4.10mm}
+{\Large \bf Bachelor of Technology} \\
+in \\
+{\large \bf Computer Science and Engineering}\\
+with Specialization in\\
+{\large \bf Cyber Security} \\
+\vspace{3.85mm}
+{\em by} \\ \vspace{2.15mm}
+{\large \bf Ben Savio - 2023BCY0009}\\
+{\large \bf Harsh Kumar Gour - 2023BCY0010}\\
+{\large \bf Byreddy Varshith Reddy - 2023BCY0063}\\
+{\large \bf Andela Harsha Vardhan - 2023BCY0024}\\
+\vspace{4mm}
+\includegraphics[width=5cm, height=2.85cm]{logo2.jpg}\\
+\vspace*{0.1cm}
+{\em\large to}\\
+{\bf \mbox{DEPARTMENT OF CSE-CYBER SECURITY}}\\
+{\bf \mbox{INDIAN INSTITUTE OF INFORMATION TECHNOLOGY}}\\
+{\bf KOTTAYAM-686635, INDIA}\\
+{\it \reportdate}
+\end{center}
+\end{titlepage}
+
+\clearpage
+% --------------- Declaration -----------------------
+\pagenumbering{roman}\setcounter{page}{2}
+\begin{center}{\large\bf DECLARATION}\end{center}
+
+\sloppy\noindent We, \textbf{Ben Savio} (\textbf{Roll No: 2023BCY0009}), \textbf{Harsh Kumar Gour}
+(\textbf{Roll No: 2023BCY0010}), \textbf{Byreddy Varshith Reddy} (\textbf{Roll No: 2023BCY0063})
+and \textbf{Andela Harsha Vardhan} (\textbf{Roll No: 2023BCY0024}), hereby declare that this report
+entitled \textbf{``\projecttitle''} submitted to Indian Institute of Information Technology Kottayam
+towards partial requirement of {\bf Bachelor of Technology} in \textbf{Computer Science and
+Engineering} with specialization in \textbf{Cyber Security} is an original work carried out by us
+under the supervision of \textbf{\guide} and has not formed the basis for the award of any degree or
+diploma, in this or any other institution or university. We have sincerely tried to uphold the
+academic ethics and honesty. Whenever an external information or statement or result is used then,
+that have been duly acknowledged and cited.
+
+\vspace{2.5cm}
+\noindent Kottayam-686635 \hfill \textbf{Ben Savio}\\
+\noindent \reportdate \hfill \textbf{Harsh Kumar Gour}\\
+\mbox{}\hfill \textbf{Byreddy Varshith Reddy}\\
+\mbox{}\hfill \textbf{Andela Harsha Vardhan}
+\clearpage
+
+% --------------- Certificate -----------------------
+\begin{center}{\large\bf CERTIFICATE}\end{center}
+
+\sloppy\noindent This is to certify that the work contained in this project report entitled
+\textbf{``\projecttitle''} submitted by \textbf{Ben Savio} (\textbf{Roll No: 2023BCY0009}),
+\textbf{Harsh Kumar Gour} (\textbf{Roll No: 2023BCY0010}), \textbf{Byreddy Varshith Reddy}
+(\textbf{Roll No: 2023BCY0063}) and \textbf{Andela Harsha Vardhan} (\textbf{Roll No: 2023BCY0024})
+to the Indian Institute of Information Technology Kottayam towards partial requirement of
+{\bf Bachelor of Technology} in \textbf{Computer Science and Engineering} with specialization in
+\textbf{Cyber Security} has been carried out by them under my supervision and that it has not been
+submitted elsewhere for the award of any degree.
+
+\vspace{4cm}
+\noindent Kottayam-686635 \hfill (\guide)\\
+\noindent \reportdate \hfill Project Supervisor
+\clearpage
+
+% --------------- Acknowledgement -----------------------
+\begin{center}{\large\bf ACKNOWLEDGEMENT}\end{center}
+\addcontentsline{toc}{chapter}{Acknowledgement}
+
+We express our sincere gratitude to our project guide, \guide, for his guidance, encouragement
+and valuable suggestions throughout this work; his feedback at the Phase~I review shaped the
+direction of the implementation and its evaluation. We thank the Department of CSE-Cyber Security,
+Indian Institute of Information Technology Kottayam, for the facilities and the academic environment
+that made this project possible, and the faculty and staff of the department for their support.
+We also acknowledge the authors and maintainers of the open tools and datasets this work builds on:
+ns-3, SUMO, the Luxembourg SUMO Traffic (LuST) scenario, the VeReMi Extension dataset and
+Hyperledger Fabric.
+
+\vspace{2cm}
+\noindent\hfill Ben Savio \quad Harsh Kumar Gour \quad Byreddy Varshith Reddy \quad Andela Harsha Vardhan
+\clearpage
+
+% --------------- Abstract -----------------------
+\begin{center}{\Large\bf ABSTRACT}\end{center}
+\addcontentsline{toc}{chapter}{Abstract}
+\input{chapters/abstract}
+\clearpage
+
+\fussy
+\tableofcontents
+\clearpage
+\listoffigures
+\listoftables
+\input{chapters/abbreviations}
+
+\clearpage
+\pagenumbering{arabic}\setcounter{page}{1}
+
+\input{chapters/ch1_introduction}
+\input{chapters/ch2_background}
+\input{chapters/ch3_literature}
+\input{chapters/ch4_design}
+\input{chapters/ch5_optimisation}
+\input{chapters/ch6_implementation}
+\input{chapters/ch7_results}
+\input{chapters/ch8_conclusion}
+
+\appendix
+\input{chapters/appendix}
+
+\bibliographystyle{IEEEtran}
+\bibliography{bib}
+
+\end{document}

@@ -1,0 +1,18 @@
+\begin{table}[htbp]\centering\scriptsize
+\caption{Grid scenario, 150 vehicles: security and privacy}\label{tab:compare-sec}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Variant & \rotatebox{70}{Revoked accepted} & \rotatebox{70}{Caught} & \rotatebox{70}{Honest revoked} & \rotatebox{70}{Tracked} & \rotatebox{70}{Report to revocation (s)} & \rotatebox{70}{OBU load} \\
+\midrule
+Phase-I & 1.000 & 1.00 & 0.2 $\pm$ 0.6 & 1.00 $\pm$ 0.01 & 2.59 $\pm$ 0.74 & 0.0270 $\pm$ 0.0022 \\
+v2 & 1.000 & 1.00 & 0.2 $\pm$ 0.6 & 0.99 $\pm$ 0.01 & 2.57 $\pm$ 0.71 & 0.0158 $\pm$ 0.0013 \\
+v2-mac & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.01 & 2.66 $\pm$ 0.78 & 0.0046 $\pm$ 0.0003 \\
+v3-fast & 0.001 $\pm$ 0.000 & 1.00 & 0.0 & 0.98 $\pm$ 0.01 & 2.62 $\pm$ 0.74 & 0.0056 $\pm$ 0.0003 \\
+v3-private & 0.001 $\pm$ 0.001 & 1.00 & 0.0 & 0.76 $\pm$ 0.05 & 2.72 $\pm$ 0.85 & 0.0050 $\pm$ 0.0003 \\
+ECDSA-PKI & -- & 1.00 & 0.0 & -- & 2.60 $\pm$ 0.82 & -- \\
+Central-TA & -- & 1.00 & 0.0 & -- & 2.55 $\pm$ 0.69 & -- \\
+\bottomrule
+\end{tabular}}
+\par\smallskip\parbox{\textwidth}{\scriptsize Caught: share of attackers reported; Revoked accepted: share of BSMs from revoked senders that vehicles still accepted; Tracked: share of pseudonym changes a global eavesdropper links.}
+\end{table}

@@ -1,0 +1,21 @@
+\begin{table}[htbp]\centering\small
+\caption{Hyperledger Fabric 3.1.5: commit latency of RecordAuth under load}\label{tab:ledger}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Ordering service & Offered (tx/s) & Achieved (tx/s) & p50 (ms) & p95 (ms) \\
+\midrule
+Raft, 500 ms batch timeout & 5 & 5.0 & 318 & 522 \\
+ & 10 & 10.0 & 317 & 520 \\
+ & 20 & 20.0 & 258 & 471 \\
+\midrule
+Raft, 50 ms batch timeout & 5 & 5.0 & 66 & 69 \\
+ & 10 & 10.0 & 66 & 69 \\
+ & 20 & 20.0 & 67 & 178 \\
+\midrule
+SmartBFT, 50 ms batch timeout & 5 & 5.0 & 50 & 73 \\
+ & 10 & 10.0 & 51 & 74 \\
+ & 20 & 20.0 & 229 & 515 \\
+\bottomrule
+\end{tabular}}
+\end{table}

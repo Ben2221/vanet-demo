@@ -1,0 +1,23 @@
+\begin{table}[htbp]\centering\small
+\caption{Measured cost of each cryptographic operation on the development PC (ms)}\label{tab:compute}
+\begin{tabular}{lr}
+\toprule
+Operation & Time (ms) \\
+\midrule
+Schnorr proof (vehicle, with precomputed commitment) & 0.040 \\
+Schnorr proof verification (RSU) & 0.077 \\
+Merkle path check & 0.006 \\
+Schnorr signature & 0.082 \\
+Schnorr signature verification & 0.076 \\
+BSM signature verification & 0.082 \\
+TESLA MAC & 0.006 \\
+ECQV certificate issue & 0.056 \\
+ECQV key reconstruction & 0.048 \\
+BBS proof & 2.852 \\
+BBS proof, online part & 0.133 \\
+BBS verification & 3.753 \\
+ECDSA P-256 sign (baseline) & 0.022 \\
+ECDSA P-256 verify (baseline) & 0.058 \\
+\bottomrule
+\end{tabular}
+\end{table}

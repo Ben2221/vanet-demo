@@ -1,0 +1,111 @@
+\chapter{Introduction}\label{ch:intro}
+
+Road vehicles are becoming networked computers. Through dedicated short-range radio, a vehicle can
+tell the vehicles around it where it is, how fast it is going and that it is braking, long before a
+driver could see the danger. Intelligent Transportation Systems (ITS) build collision warnings,
+cooperative intersection management and emergency-vehicle preemption on these messages. Their value
+depends on one question that the radio alone cannot answer: can the message be trusted? This report
+describes a system that answers it without giving up the privacy of the people in the vehicles, and
+measures what that costs on a realistic network.
+
+\section{Vehicular Ad Hoc Networks}
+
+A vehicular ad hoc network (VANET) consists of three kinds of participants:
+\begin{itemize}
+  \item \textbf{On-board units (OBUs):} the radio computers in vehicles. They broadcast a
+  \emph{Basic Safety Message} (BSM)~\cite{saej2735}, also called a cooperative awareness message
+  in Europe~\cite{etsi302637}, about ten times per second, with position, speed and heading.
+  \item \textbf{Roadside units (RSUs):} fixed radios at junctions with a wired backbone connection.
+  They authenticate vehicles, relay information and act as the network's local infrastructure.
+  \item \textbf{A trusted authority (TA):} for example a transport department, which registers
+  vehicles. It is not on the communication path during normal operation.
+\end{itemize}
+Vehicles talk to each other (V2V) and to RSUs (V2I) over IEEE 802.11p~\cite{jiang2008wave,kenney2011dsrc},
+a Wi-Fi variant for the 5.9\,GHz band that works without association, so a vehicle can broadcast to
+whoever is in range. Links last seconds, topology changes constantly, and every vehicle in range shares one channel.
+
+\section{Motivation}
+
+Three requirements pull in different directions:
+\begin{enumerate}
+  \item \textbf{Trust.} A forged BSM reporting a phantom vehicle can trigger an emergency brake; a
+  forged emergency-vehicle message can clear an intersection for an attacker. Receivers must verify
+  that every message comes from a registered vehicle, and misbehaving vehicles must be removed.
+  \item \textbf{Privacy.} A vehicle that broadcasts its position ten times a second under a fixed
+  identifier can be tracked through a city by anyone with a receiver~\cite{gruteser2005tracking}.
+  Authentication must therefore not reveal \emph{which} vehicle is speaking, yet an authorized
+  investigation must still be able to identify a vehicle that attacked the network (conditional
+  privacy).
+  \item \textbf{Efficiency.} Security bytes are paid ten times a second by every vehicle on a shared
+  channel. Above roughly 60\,\% channel occupancy, broadcasts start to collide and safety messages
+  are lost. Verification must also finish within milliseconds on modest automotive hardware.
+\end{enumerate}
+Certificate-based schemes~\cite{raya2007securing,brecht2018scms} solve the first by keeping a
+central authority on the trust path and the second by changing pseudonym certificates, at the cost of
+large certificate pools and revocation lists. Zero-knowledge schemes~\cite{rasheed2020adaptive,xi2022zama}
+hide the credential but lack a shared, auditable record of authorization and revocation across RSUs.
+Blockchain-based schemes~\cite{alsaeed2025baaiov,li2024bpa,wang2021btsca} provide that shared state
+but add consensus latency. The Phase~I review of this project identified the open question:
+
+\begin{quote}
+\emph{Can privacy-preserving ZKP authentication be combined with permissioned blockchain
+authorization and lifecycle management without unacceptable latency, computation or communication
+overhead?}
+\end{quote}
+
+\section{Objectives}
+
+\begin{enumerate}
+  \item Design a scheme in which a vehicle proves registration with a zero-knowledge proof, an RSU
+  decides access with a ledger policy, and registration roots, authorizations, misbehaviour reports,
+  revocations and identity-reveal approvals live on a permissioned blockchain.
+  \item Support the whole lifecycle: registration, authentication, handover, renewal, signed safety
+  messages, detection and reporting, revocation and threshold identity reveal.
+  \item Implement it completely: protocol, chaincode and gateway on Hyperledger Fabric, detector, and
+  a network simulation on ns-3 with SUMO mobility.
+  \item Measure it on realistic traffic against established baselines, report means with confidence
+  intervals and significance tests, and state the limitations.
+  \item Reduce the measured latency and overhead without weakening the security model, and handle
+  emergency vehicles as a privileged class.
+\end{enumerate}
+
+\section{Contributions}
+
+\begin{itemize}
+  \item A complete authentication and authorization lifecycle that keeps the blockchain off the
+  critical path of safety messages: proofs are verified at the RSU, and the ledger holds only the
+  state that has to be shared and audited (Chapter~\ref{ch:design}).
+  \item A set of optimisations (TESLA, implicit certificates, RSU clusters, dead reckoning,
+  revocation filters, fast quarantine, trust-weighted reports, batch verification) and a privacy
+  profile (BBS credentials, cooperative mix zones), each measured on its own in an ablation
+  (Chapter~\ref{ch:opt}).
+  \item An emergency-vehicle extension: class-bound credentials, a policy-restricted service,
+  signed siren alerts that cannot be forged under a normal ticket, and a priority lane at RSUs.
+  \item A reproducible evaluation framework: ns-3 802.11p with real Luxembourg traffic, measured
+  cryptographic costs on a per-node processor model, the VeReMi Extension detection benchmark, a
+  Fabric consensus benchmark, ten parameter sweeps, and a live browser visualisation for
+  demonstrations (Chapters~\ref{ch:impl} and~\ref{ch:results}).
+\end{itemize}
+
+\section{Team and Division of Work}
+
+The implementation was divided into four parts with written interfaces between them
+(\texttt{docs/interfaces.md} in the repository):
+\begin{itemize}
+  \item \textbf{Ben Savio (Person~1):} SUMO mobility and the LuST scenario, the ns-3 802.11p
+  network, the ledger bridge and the integration of all parts.
+  \item \textbf{Harsh Kumar Gour (Person~2):} the Hyperledger Fabric network, the chaincode and the
+  REST gateway.
+  \item \textbf{Byreddy Varshith Reddy (Person~3):} the authentication protocol: zero-knowledge
+  login, tickets, handover and revocation.
+  \item \textbf{Andela Harsha Vardhan (Person~4):} misbehaviour detection and the evaluation tooling.
+\end{itemize}
+
+\section{Report Structure}
+
+Chapter~\ref{ch:background} introduces the cryptographic and blockchain building blocks and defines
+the threat model. Chapter~\ref{ch:lit} reviews related work. Chapter~\ref{ch:design} presents the
+scheme, Chapter~\ref{ch:opt} the optimisations and the emergency-vehicle extension, and
+Chapter~\ref{ch:impl} the implementation. Chapter~\ref{ch:results} reports the evaluation, and
+Chapter~\ref{ch:conclusion} concludes with limitations and future work. The appendix lists how to
+reproduce every result.

@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay viz emergency evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay viz emergency report evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -36,6 +36,7 @@ help:
 	@echo "make ledger-bench   real Fabric: commit latency of Raft vs BFT ordering (Docker, Fabric 3.1.5)"
 	@echo "make show           key numbers of every run under experiments/results/"
 	@echo "make demo           live side-by-side: Phase I vs v3-fast vs v3-private on ns-3 (~3 min)"
+	@echo "make report         the project report PDF (docs/report) from the current results"
 	@echo "make emergency      emergency vehicles: login priority, alerts, fake-ambulance attack (LuST)"
 	@echo "make live           narrate one ns-3 run in plain English as it runs (PROFILE=..., ALL=1 for every handover)"
 	@echo "make viz            the same as a live map in the browser, click vehicles and RSUs (MAP=lust:low ...)"
@@ -92,6 +93,14 @@ evaluate-all: $(PY)
 compare-lust: $(PY)
 	$(PY) experiments/run.py --config experiments/configs/compare_lust.json --jobs $(JOBS)
 	$(PY) experiments/report.py experiments/results/compare_lust
+
+# the project report (docs/report): tables, figures and numbers from the results, then the PDF
+# with latexmk or tectonic if one is installed (else upload docs/report to Overleaf)
+report: $(PY)
+	$(PY) experiments/thesis_data.py
+	cd docs/report && if command -v latexmk >/dev/null; then latexmk -pdf -interaction=nonstopmode report.tex; \
+	elif command -v tectonic >/dev/null; then tectonic -X compile report.tex; \
+	else echo "no LaTeX found: upload docs/report to Overleaf, or install latexmk or tectonic"; fi
 
 # emergency vehicles on LuST mid-day and rush hour: login priority, alerts, fake-ambulance attack
 emergency: $(PY)

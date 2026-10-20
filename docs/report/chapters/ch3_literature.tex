@@ -1,0 +1,101 @@
+\chapter{Literature Review}\label{ch:lit}
+
+VANET authentication schemes optimise different objectives: privacy, efficiency, decentralisation,
+accountability or support for mobility. This chapter groups them by approach, notes what each
+contributes and what it leaves open for this work, and positions the project.
+
+\section{PKI and Pseudonymous Certificates}
+
+Raya and Hubaux~\cite{raya2007securing} define the VANET threat model and a public-key
+infrastructure in which every vehicle carries a large pool of short-lived anonymous certificates.
+The authority can resolve a pseudonym when an investigation is authorised. This architecture underlies
+the US Security Credential Management System (SCMS)~\cite{brecht2018scms} and IEEE
+1609.2~\cite{ieee16092}. Its costs are the pre-loading and refresh of thousands of certificates and
+large certificate revocation lists. Privacy comes only from changing identifiers, and the authority
+stays on the trust path. Zhong et al.~\cite{zhong2019aggregation} compress many signatures into one
+with certificateless aggregate signatures, which cuts verification and communication, but the trace
+authority remains a single point of trust and no ledger shares revocation state between RSUs.
+
+\section{ECC and Certificateless Authentication}
+
+Liu et al.~\cite{liu2025ecc} propose cooperative ECC-based mutual authentication with pseudonyms,
+batch verification and group keys for low RSU workload. The trusted authority issues and holds every
+long-term key, so it can link any pseudonym to a real identity. Qi et al.~\cite{qi2022certificateless}
+combine pseudonyms with certificateless signatures to avoid certificate management and key escrow.
+Certificateless cryptography removes the certificate, not the authority: a key generation centre
+still issues partial keys, and per-message verification remains.
+
+\section{Hardware and Game-Theoretic Approaches}
+
+Li et al.~\cite{li2024puf} derive authentication secrets from physical unclonable functions (PUFs),
+which resist key extraction but require PUF hardware in every OBU and cannot be retrofitted to a mixed
+fleet. Gupta et al.~\cite{gupta2022game} combine a game-theoretic trust model with a blockchain to
+decide authentication, at the cost of decision and consensus complexity.
+
+\section{Blockchain-Based Authentication}
+
+Blockchains give RSUs shared, tamper-evident state. BAAIoV~\cite{alsaeed2025baaiov} uses a blockchain
+for both authentication and authorization in the Internet of Vehicles, and BPA~\cite{li2024bpa} builds
+privacy-preserving authentication on it. B-TSCA~\cite{wang2021btsca} uses blockchain-assisted
+trustworthiness computation so that re-authentication at the next RSU is cheaper than the first
+authentication. Xie et al.~\cite{xie2023handover} add PUFs for lightweight V2I handover and V2V
+broadcast authentication. In all of these the ledger supplies shared state, but the credential is
+still shown to the verifier, so privacy depends on pseudonym management and nothing prevents linking
+two sessions of the same vehicle.
+
+\section{Zero-Knowledge Authentication}
+
+Rasheed et al.~\cite{rasheed2020adaptive} use group-based zero-knowledge proofs with configurable
+privacy and revocation. They rely on interactive proof rounds and a trusted group manager, which costs
+round trips at every handover. ZAMA~\cite{xi2022zama} combines a ZKP, ECC and a Fujisaki--Okamoto
+commitment for anonymous mutual authentication with traceability, at a higher cost per
+authentication and with a central authority. Varma and Kumar~\cite{varma2023zkp} focus on lightweight
+ZKP authentication during handover. Without decentralised state, authorization and revocation
+decisions cannot follow a vehicle between RSUs and cannot be audited independently.
+
+\section{Blockchain with Zero-Knowledge Proofs}
+
+The schemes closest to this work combine both. Jiang and Guo~\cite{jiang2024trug} use master--slave
+chains with a PBFT variant and a ZKP. Wang et al.~\cite{wang2025privacy} use identity-based polynomial
+commitments, a ZKP and a Merkle Patricia trie on a blockchain for anonymous authentication and data
+retrieval; a key generation centre remains in the setup, and service-level policy, the revocation
+lifecycle and RSU handover are not modelled. Li et al.~\cite{li2026emergency} authenticate emergency
+vehicles with one-time hash commitments, category Merkle trees, a ZKP and on-chain state, but cover a
+small static fleet under one authorization decision.
+
+\section{Misbehaviour Detection and Location Privacy}
+
+Plausibility checks and learned detectors are evaluated on VeReMi~\cite{heijden2018veremi} and
+VeReMi Extension~\cite{kamel2020veremiext}. For privacy against a global eavesdropper, pseudonym
+changes alone are weak because a tracker links the old and the new pseudonym by position and
+speed~\cite{gruteser2005tracking}; mix zones~\cite{beresford2003mix,freudiger2007mix}, where vehicles
+change pseudonyms together and stay silent briefly, break that link.
+
+\section{Comparison and Research Gap}
+
+\begin{table}[htbp]\centering\small
+\caption{Families of VANET authentication schemes (adapted from the Phase~I review)}\label{tab:families}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Family & Identity privacy & Shared state & Accountability & Main limitation \\
+\midrule
+PKI / pseudonym~\cite{raya2007securing} & medium--high & low & high & certificates and revocation lists \\
+ECC / certificateless~\cite{liu2025ecc,qi2022certificateless} & medium & low & high & dependence on the TA \\
+Aggregate~\cite{zhong2019aggregation} & high & low & medium--high & trace authority \\
+PUF~\cite{li2024puf} & high & low & medium & special hardware \\
+Blockchain~\cite{alsaeed2025baaiov,li2024bpa,wang2021btsca,xie2023handover} & medium & high & high & consensus latency \\
+ZKP~\cite{varma2023zkp,rasheed2020adaptive,xi2022zama} & very high & low & medium--high & proof cost, no shared state \\
+Blockchain + ZKP~\cite{jiang2024trug,wang2025privacy,li2026emergency} & very high & high & high & integration, scalability \\
+\textbf{This work} & very high & high & high & measured in Chapter~\ref{ch:results} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:families} summarises the families. The direct blockchain-plus-ZKP literature shows
+that the combination is feasible. What it does not provide is a complete lifecycle (handover,
+renewal, misbehaviour reporting, revocation that reaches vehicles, threshold identity reveal,
+per-service policy) evaluated on a realistic network with measured costs. This project therefore
+does not claim the combination as new. Its contribution is a concrete integration that keeps the
+ledger off the safety-message path, and its measurement against certificate-based and centralised
+baselines on ns-3 with real traffic.

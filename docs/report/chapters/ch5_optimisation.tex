@@ -1,0 +1,153 @@
+\chapter{Optimisations and Extensions}\label{ch:opt}
+
+The first evaluation of the Phase~I scheme showed where its cost lies. Every BSM carried a full
+ticket and a signature of about 330 bytes, sent ten times a second by every vehicle. At 150 vehicles
+the safety traffic alone occupied about a quarter of the channel. Vehicles also had no revocation
+information at all: they accepted messages from revoked senders until those senders' tickets
+expired. This chapter describes the mechanisms added to address these problems. Each is an option
+of the implementation and is measured on its own in the ablation study
+(Section~\ref{sec:res-ablation}). Table~\ref{tab:profiles} groups them into the profiles compared in
+Chapter~\ref{ch:results}.
+
+\begin{table}[htbp]\centering\small
+\caption{Mechanisms per profile ($\bullet$ = enabled)}\label{tab:profiles}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Mechanism & Phase-I & v2 & v3-fast & v3-private \\
+\midrule
+Ticket digests, compact wire format, handover hysteresis & & $\bullet$ & $\bullet$ & $\bullet$ \\
+Fast quarantine over the RSU backbone & & $\bullet$ & $\bullet$ & $\bullet$ \\
+TESLA with adaptive signing and key messages & & & $\bullet$ & $\bullet$ \\
+ECQV implicit-certificate tickets & & & $\bullet$ & $\bullet$ \\
+RSU clusters ($2\times2$) & & & $\bullet$ & $\bullet$ \\
+Load-triggered batch verification & & & $\bullet$ & $\bullet$ \\
+Dead-reckoning BSM triggering & & & $\bullet$ & $\bullet$ \\
+Revocation filter in beacons & & & $\bullet$ & $\bullet$ \\
+Trust-weighted reports & & & $\bullet$ & $\bullet$ \\
+Ticket renewal; signal-strength check & & & $\bullet$ & $\bullet$ \\
+BBS anonymous credentials & & & & $\bullet$ \\
+Cooperative mix zones & & & & $\bullet$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\section{Smaller Messages: Digests, Compact Encoding, Implicit Certificates}
+
+A vehicle sends its full ticket only every tenth BSM, after hearing a new RSU, and at least every
+2\,s; the other BSMs carry a 16-byte ticket digest that receivers resolve from a cache. The compact
+wire format packs the kinematics into 16 bytes and uses 64-byte BIP-340 signatures. With ECQV
+(Section~\ref{sec:tesla-ecqv}) the RSU issues an implicit certificate instead of signing the ticket, which saves the
+explicit key and signature. The certificate request point is bound into the proof context, so nobody
+can swap it on the air and receive a certificate for someone else's pseudonym.
+
+\section{Cheaper Authentication: TESLA with Adaptive Signing}
+
+With TESLA a BSM carries a 16-byte MAC under the current chain key instead of a signature. Keys are
+disclosed two 25\,ms intervals later, in the vehicle's next BSM or in a small key message, so a
+receiver can accept the BSM after about 50\,ms. A signed anchor BSM carries the chain commitment. To
+avoid the TESLA delay when it brings nothing, the vehicle signs every BSM while its channel is quiet
+and switches to TESLA when the channel busy ratio exceeds 0.30 (and back below 0.20, with 1\,s of
+hysteresis). Urgent BSMs, after braking harder than 3\,m/s$^2$, are always signed so that neighbours
+can act on them at once.
+
+\section{Fewer Messages: Dead Reckoning}
+
+Receivers predict a vehicle's position from its last BSM by dead reckoning. The vehicle sends a BSM
+only when that prediction drifts by more than 1\,m, its speed changes by more than 0.5\,m/s or its
+heading by more than $4^\circ$, and at least once a second. This follows the generation rules of the
+European cooperative awareness service~\cite{etsi302637}. On straight roads at constant speed most
+BSMs become unnecessary, while every manoeuvre is still reported immediately.
+
+\section{Fewer Handovers: RSU Clusters and Ticket Renewal}
+
+RSUs are grouped into clusters of $2\times2$, and a ticket is valid at every RSU of its cluster, so
+moving between them needs no messages at all. Before a ticket expires, the vehicle renews it with one
+signed request instead of a new proof.
+
+\section{Load-Triggered Batch Verification}
+
+Schnorr signatures can be verified in batches with one multi-scalar multiplication~\cite{bellare1998batch}.
+The measured speed-up is \R{ct}{batch_speedup_8}$\times$ for 8 signatures and
+\R{ct}{batch_speedup_32}$\times$ for 32. Waiting to fill a batch would add latency, so batching is
+load-triggered: a signature that finds the processor idle is verified at once, and only signatures
+that arrive while it is busy are verified together, up to 32, the moment it is free. If a batch fails,
+bisection finds the invalid signatures.
+
+\section{Revocation that Reaches Vehicles}
+
+\textbf{Revocation filter.} Every fifth beacon (2\,Hz) carries a Bloom filter (7 hash functions, about 1\,\% false positives) of the pseudonyms
+revoked or quarantined within the last ticket lifetime. Vehicles drop BSMs from pseudonyms in the
+filter of the last beacon they verified. False positives are possible but rare, and they only drop
+a message.
+
+\textbf{Fast quarantine.} An RSU that reports a pseudonym also sends a signed QUARANTINE note over
+the backbone to its neighbouring RSUs. Once notes from $K = 2$ distinct RSUs arrive, they block the
+pseudonym locally until the ledger revocation lands, which takes milliseconds instead of a ledger
+commit.
+
+\section{Trust-Weighted Reports}\label{sec:trust}
+
+A compromised RSU could report honest vehicles. With trust weighting, the TA investigates every
+traced pseudonym. In the simulation the ground truth stands in for the investigation. Each RSU that
+reported it gets a weight
+\begin{equation}
+  w = \min\!\left(1,\ \frac{2\,(\mathit{tp}+1)}{\mathit{tp}+\mathit{fp}+2}\right),
+\end{equation}
+where $\mathit{tp}$ and $\mathit{fp}$ count its confirmed and wrong reports. Revocation then needs a
+report weight of at least $K$ instead of $K$ reporters. An honest RSU keeps weight 1; an RSU with more
+wrong than right reports loses influence. Weights are stored on the ledger through
+\texttt{SetReporterWeight}.
+
+\section{Signal-Strength Check}
+
+An RSU estimates the sender's distance from the received power using the scenario's path-loss model
+with 4\,dB log-normal shadowing. It flags a BSM whose claimed position disagrees with that estimate
+by more than four standard deviations and by at least 100\,m. A position-forging attacker cannot
+move its own transmitter, so its claims stop matching its signal.
+
+\section{The Privacy Profile: BBS Credentials and Mix Zones}
+
+\textbf{BBS credentials.} The TA signs each vehicle's hidden secret, class and epoch once. A login
+proves possession of that signature in zero knowledge and reveals the pseudonym
+$\mathit{nym}_j = H(\mathit{epoch}, j)^{sk_v}$ for some $j < 32$. Logins are unlinkable even to
+colluding RSUs, the TA no longer knows the pseudonyms in advance, and the identity escrow lists the
+pseudonyms the credential can produce. The proof is about 70 times more expensive than a Schnorr proof
+(Table~\ref{tab:compute}). Its nonce-independent part is therefore precomputed while the vehicle is
+idle.
+
+\textbf{Cooperative mix zones.} Changing a pseudonym alone does not stop a global eavesdropper, which
+links the old and new pseudonyms by position and speed. Within 30\,m of a junction, a vehicle with at
+least three neighbours triggers a coordinated change: every neighbour in the zone whose pseudonym is
+old enough changes too, and each stays silent until it has left the zone and for a random
+0.5--1.5\,s, at most 5\,s. The tracker attack of Section~\ref{sec:res-privacy} measures the effect.
+
+\section{Emergency Vehicles}\label{sec:emergency}
+
+Emergency vehicles need the opposite of anonymity on one point: their privileged status must be
+verifiable by everyone, and must be impossible to fake. The extension builds this on the
+authorization predicate (\ref{eq:access}).
+\begin{enumerate}
+  \item \textbf{Registration.} The TA registers an ambulance's pseudonyms with class
+  \textit{emergency}. The class is in the Merkle leaf (or the BBS credential) and in the proof context,
+  so a car cannot claim it.
+  \item \textbf{Service.} Ambulances log in for the service \texttt{emergency-priority}, whose ledger
+  policy admits only class \textit{emergency}. Their tickets therefore carry, signed by the RSU, the
+  class and the service.
+  \item \textbf{Siren alerts.} With the siren on, every BSM of an emergency vehicle is signed (never
+  TESLA, so receivers need not wait), carries the full ticket and a flag \texttt{ev} inside the
+  signed payload, and is never suppressed by dead reckoning. Vehicles process alerts from up to
+  300\,m, beyond the 100\,m safety radius of normal BSMs.
+  \item \textbf{Verification.} A receiver honours the flag only if the RSU-signed class of the
+  sender's ticket is \textit{emergency}; otherwise it rejects the message as a fake. A signed fake is
+  itself proof of the lie: no detector judgment is involved. The first RSU that receives one reports
+  the pseudonym at once with the message hash as evidence, and quarantine and revocation follow.
+  \item \textbf{Priority.} Emergency logins, renewals and handovers, and the RSUs' answers to
+  them, are sent on the 802.11p access category AC\_VI instead of AC\_BE, so they do not wait
+  behind the queue of ordinary logins on the radio. Safety messages keep the highest category,
+  AC\_VO. The RSU also verifies them ahead of its processing queue: such a login waits only for the
+  job in progress. Because the claim is checked only by the verification itself, an RSU grants
+  priority to at most five claims per second, so false claims cannot crowd out everyone else.
+\end{enumerate}
+The fake-emergency attacker of the evaluation tries one emergency login, which the policy denies,
+and then sets the flag on all of its BSMs.
