@@ -161,6 +161,8 @@ live: $(PY)
 # details; pause and speed on the page (PACE sets the starting speed, 1 = real time)
 VIZ_PORT ?= 8765
 viz: $(PY)
+	@if ss -ltnH "sport = :$(VIZ_PORT)" 2>/dev/null | grep -q .; then \
+	    echo "port $(VIZ_PORT) is in use (another make viz?); run: make viz VIZ_PORT=8766"; exit 1; fi
 	$(DEMO) $(if $(filter Phase-I,$(PROFILE)),,--profile $(PROFILE)) --viz --viz-port $(VIZ_PORT) \
 	    --live-pace $(if $(filter 0,$(strip $(PACE))),1,$(strip $(PACE))) --out experiments/results/viz/$(PROFILE)
 
