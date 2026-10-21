@@ -25,7 +25,19 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\renewcommand{\baselinestretch}{1.5}
+% 1.5 spacing for the text; tables, figures and their captions single-spaced
+\setstretch{1.5}
+\usepackage{etoolbox}
+\AtBeginEnvironment{table}{\setstretch{1.0}}
+\AtBeginEnvironment{figure}{\setstretch{1.0}}
+% less white space above chapter titles; the contents list chapters and sections
+\makeatletter
+\patchcmd{\@makechapterhead}{\vspace*{50\p@}}{\vspace*{10\p@}}{}{}
+\patchcmd{\@makeschapterhead}{\vspace*{50\p@}}{\vspace*{10\p@}}{}{}
+\patchcmd{\@makechapterhead}{\vskip 40\p@}{\vskip 25\p@}{}{}
+\patchcmd{\@makeschapterhead}{\vskip 40\p@}{\vskip 25\p@}{}{}
+\makeatother
+\setcounter{tocdepth}{1}
 
 % ---------------------------------------------------------------- project data
 \newcommand{\projecttitle}{Privacy-Preserving Authentication and Authorization for VANETs Using Blockchain and Zero-Knowledge Proofs}
@@ -145,10 +157,14 @@ Hyperledger Fabric.
 \clearpage
 
 \fussy
+% the lists are single-spaced, and the lists of figures and tables share pages
+\begingroup\setstretch{1.0}
 \tableofcontents
 \clearpage
 \listoffigures
+\let\clearpage\relax
 \listoftables
+\endgroup
 \input{chapters/abbreviations}
 
 \clearpage

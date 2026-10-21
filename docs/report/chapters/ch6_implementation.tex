@@ -63,12 +63,10 @@ in the centre at three times of day: 06:00 (about 150 vehicles in the box), 14:0
 08:00 peak (about 525). A 900\,s warm-up fills the roads before the measured window. Vehicles that
 leave the box are parked outside radio range until they come back.
 
-\textbf{Mobility step and lane changes.} SUMO runs at 0.1\,s steps, so acceleration and braking are
-smooth. By default SUMO moves a car to the next lane within a single step. That is a 3.2\,m sideways
-jump in 0.1\,s, which the waypoint trace turned into a velocity of about 32\,m/s for one step, so a
-car stopped at a junction claimed 32\,m/s. The detector rightly flagged these impossible claims. The
-final evaluation uses SUMO's lane-change duration of 2\,s, as real drivers change lanes. This removed
-all such spikes on the grid trace and all but two of 385 on a LuST trace.
+\textbf{Mobility step and lane changes.} SUMO runs at 0.1\,s steps. Its default instant lane change
+is a 3.2\,m sideways jump in one step, which the trace turned into a false 32\,m/s velocity that the
+detector rightly flagged. The evaluation therefore uses a 2\,s lane-change duration, as real drivers
+do, which removed all such spikes on the grid and all but two of 385 on LuST.
 
 \section{Radio Network}
 
@@ -172,7 +170,7 @@ vehicles in range, its counters and its recent checks. The page can pause the si
 its speed.
 
 \begin{figure}[htbp]\centering
-\includegraphics[width=\textwidth]{figures/live_map_vehicle.png}
+\includegraphics[width=0.85\textwidth]{figures/live_map_vehicle.png}
 \caption{Live map of a running ns-3 simulation (grid, 50 vehicles, v3-fast with emergency vehicles).
 The selected emergency vehicle shows its registered class and its \texttt{emergency-priority}
 ticket; revoked attackers are marked with a cross; the feed narrates detection and revocation.}

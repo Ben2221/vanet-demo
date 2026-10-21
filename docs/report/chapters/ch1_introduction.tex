@@ -90,22 +90,16 @@ overhead?}
 \section{Team and Division of Work}
 
 The implementation was divided into four parts with written interfaces between them
-(\texttt{docs/interfaces.md} in the repository):
-\begin{itemize}
-  \item \textbf{Ben Savio (Person~1):} SUMO mobility and the LuST scenario, the ns-3 802.11p
-  network, the ledger bridge and the integration of all parts.
-  \item \textbf{Harsh Kumar Gour (Person~2):} the Hyperledger Fabric network, the chaincode and the
-  REST gateway.
-  \item \textbf{Byreddy Varshith Reddy (Person~3):} the authentication protocol: zero-knowledge
-  login, tickets, handover and revocation.
-  \item \textbf{Andela Harsha Vardhan (Person~4):} misbehaviour detection and the evaluation tooling.
-\end{itemize}
+(\texttt{docs/interfaces.md} in the repository). \textbf{Ben Savio} built the SUMO mobility and LuST
+scenario, the ns-3 802.11p network, the ledger bridge and the integration of all parts;
+\textbf{Harsh Kumar Gour} the Hyperledger Fabric network, the chaincode and the REST gateway;
+\textbf{Byreddy Varshith Reddy} the authentication protocol (zero-knowledge login, tickets, handover
+and revocation); and \textbf{Andela Harsha Vardhan} the misbehaviour detection and the evaluation
+tooling.
 
 \section{Report Structure}
 
-Chapter~\ref{ch:background} introduces the cryptographic and blockchain building blocks and defines
-the threat model. Chapter~\ref{ch:lit} reviews related work. Chapter~\ref{ch:design} presents the
-scheme, Chapter~\ref{ch:opt} the optimisations and the emergency-vehicle extension, and
-Chapter~\ref{ch:impl} the implementation. Chapter~\ref{ch:results} reports the evaluation, and
-Chapter~\ref{ch:conclusion} concludes with limitations and future work. The appendix lists how to
-reproduce every result.
+Chapter~\ref{ch:background} covers the building blocks and the threat model, Chapter~\ref{ch:lit}
+related work, Chapters~\ref{ch:design}--\ref{ch:impl} the scheme, its optimisations and the
+implementation, Chapter~\ref{ch:results} the evaluation and Chapter~\ref{ch:conclusion} the
+conclusions. The appendix explains how to reproduce every result.
