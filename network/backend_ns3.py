@@ -210,9 +210,10 @@ uint64_t Send(uint32_t node, uint32_t dstIp, const std::string& hex, uint8_t pri
     std::vector<uint8_t> b(hex.size() / 2);
     for (size_t i = 0; i < b.size(); i++) b[i] = (Nib(hex[2 * i]) << 4) | Nib(hex[2 * i + 1]);
     Ptr<Packet> p = Create<Packet>(b.data(), b.size());
-    SocketPriorityTag tag;   // user priority -> EDCA access category
-    tag.SetPriority(prio);
-    p->ReplacePacketTag(tag);
+    // user priority -> EDCA access category. The traffic control layer derives the priority from
+    // the IP DS field (SelectQueueByDSField), replacing any packet tag, so it travels as the class
+    // selector code point: TOS = priority << 5 (CS6 -> UP 6 -> AC_VO, CS5 -> UP 5 -> AC_VI).
+    g_sock[node]->SetIpTos(static_cast<uint8_t>(prio << 5));
     uint64_t uid = p->GetUid();
     g_sock[node]->SendTo(p, 0, InetSocketAddress(Ipv4Address(dstIp), g_port));
     return uid;

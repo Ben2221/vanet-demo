@@ -208,3 +208,19 @@ def test_split_by_vehicle_never_shares_a_vehicle():
     train, test = split_by_vehicle(msgs, 0.3, seed=1)
     assert {m["vehicle"] for m in train}.isdisjoint({m["vehicle"] for m in test})
     assert train and test
+
+
+def test_rssi_distance_check():
+    from detection import detector as det
+    det.reset()
+    base = {"pid": "p", "seq": 1, "t": 1.0, "x": 300.0, "y": 0.0, "speed": 10.0, "heading": 90.0,
+            "rsu_x": 0.0, "rsu_y": 0.0, "rx_time": 1.0, "sender": 1, "rssi_sigma": 0.3}
+    assert not det.check({**base, "rssi_d": 260.0}, [])[1]["rssi_dist"]      # within shadowing
+    det.reset()
+    assert det.check({**base, "rssi_d": 60.0}, [])[1]["rssi_dist"]           # claims 300 m, is ~60 m away
+    det.reset()
+    assert not det.check({**base, "x": 40.0, "rssi_d": 10.0}, [])[1]["rssi_dist"]   # ratio 4 but only 30 m apart
+    det.reset()
+    assert "rssi_dist" in det.FEATURES and det.check(base, [])[1]["rssi_dist"] == 0  # no estimate: no check
+    det.reset()
+    assert not det.check({**base, "rssi_d": 60.0, "rssi_sigma": 0.5}, [])[1]["rssi_dist"]   # 3.2 sigma only

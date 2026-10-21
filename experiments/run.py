@@ -15,6 +15,8 @@ Config (JSON):
       "variants": [{"protocol": "stub"}, {"protocol": "experiments.baselines.ecdsa_pki"}]
     }
 
+A variant may have a "label" (its name in tables and plots; not passed to the scenario).
+
 Option names are run_scenario.py options with "_" for "-" (rsu_spacing -> --rsu-spacing);
 true adds a flag, false/null leaves it out. Results go to
 experiments/results/<name>/: runs/ (one folder per run, cached), runs.csv (one row
@@ -66,6 +68,8 @@ def run_id(params: dict) -> str:
 def to_args(params: dict) -> list[str]:
     args: list[str] = []
     for k, v in params.items():
+        if k == "label":
+            continue                    # a variant's name in the tables, not a scenario option
         flag = "--" + k.replace("_", "-")
         if v is True:
             args.append(flag)
@@ -91,6 +95,31 @@ def execute(params: dict, out: Path, force: bool) -> tuple[Path, str | None]:
     return out, None
 
 
+def prebuild(todo: list, force: bool) -> None:
+    """Build every scenario the runs need, one at a time, before running them in parallel
+    (parallel runs would otherwise build the same scenario folder at the same moment)."""
+    from mobility.build_scenario import ensure_scenario
+    from mobility.real_scenario import ensure_real_scenario
+    seen = set()
+    for p, out in todo:
+        if (out / "summary.json").exists() and not force:
+            continue
+        step = float(p.get("mobility_step", 1.0))
+        if p.get("real"):
+            key = ("real", p["real"], p.get("duration", 300), p.get("seed", 1), step)
+            if key not in seen:
+                ensure_real_scenario(p["real"], float(p.get("duration", 300)), int(p.get("seed", 1)), step,
+                                     float(p.get("rsu_spacing", 450)), float(p.get("rsu_range", 300)), quiet=True)
+        else:
+            key = ("grid", p.get("vehicles", 100), p.get("duration", 300), p.get("seed", 1), step,
+                   p.get("rsu_spacing", 450))
+            if key not in seen:
+                ensure_scenario(int(p.get("vehicles", 100)), float(p.get("duration", 300)), int(p.get("seed", 1)),
+                                p.get("net", "grid"), p.get("osm"), float(p.get("rsu_spacing", 450)),
+                                float(p.get("rsu_range", 300)), quiet=True, step=step)
+        seen.add(key)
+
+
 def run_all(cfg: dict, jobs: int, force: bool, collect_only: bool) -> list[dict]:
     base = RESULTS / cfg["name"]
     runs = expand(cfg)
@@ -103,6 +132,7 @@ def run_all(cfg: dict, jobs: int, force: bool, collect_only: bool) -> list[dict]
     todo = [(p, base / "runs" / run_id(p)) for p in runs]
     failures = []
     if not collect_only:
+        prebuild(todo, force)
         with ThreadPoolExecutor(max_workers=jobs) as pool:
             for i, (out, err) in enumerate(pool.map(lambda po: execute(po[0], po[1], force), todo), 1):
                 print(f"[{i}/{len(todo)}] {out.name}" + (" FAILED" if err else ""), flush=True)

@@ -1,0 +1,50 @@
+{
+  "name": "trust_v3",
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "fixed": {
+    "duration": 180,
+    "backend": "ns3",
+    "ledger": "mock",
+    "mobility_step": 0.1,
+    "attacker_ratio": 0.1,
+    "attack": "random_pos",
+    "attack_start": 30,
+    "compute_times": "experiments/compute_times_v3.json",
+    "rsu_cpu": false,
+    "v2v_verify": false,
+    "obu_scale": 5,
+    "privacy_log": false,
+    "vehicles": 100,
+    "faulty_rsus": 0.25,
+    "protocol": "real"
+  },
+  "variants": [
+    {
+      "label": "Phase-I (K=2)"
+    },
+    {
+      "label": "v2 (K=2, fast revocation)",
+      "profile": "v2"
+    },
+    {
+      "label": "v2 +trust-weighted",
+      "profile": "v2",
+      "trust_weighted": true
+    },
+    {
+      "label": "v3-fast",
+      "profile": "v3-fast"
+    }
+  ]
+}

@@ -12,3 +12,18 @@ experiments/results/
 *.xml.gz
 netanim.xml
 flowmon.xml
+
+# real-world datasets (downloaded by mobility/get_lust.sh and detection/get_veremi.sh)
+mobility/real/
+detection/data/
+# LaTeX build files of the report
+docs/report/*.aux
+docs/report/*.log
+docs/report/*.out
+docs/report/*.toc
+docs/report/*.lof
+docs/report/*.lot
+docs/report/*.bbl
+docs/report/*.blg
+docs/report/*.fls
+docs/report/*.fdb_latexmk

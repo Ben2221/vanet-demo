@@ -29,8 +29,8 @@ from network.metrics import MetricsLog, NetStats
 # protocol does not provide message_type(data)
 DEFAULT_TYPES = {1: "BEACON", 2: "AUTH_REQ", 3: "AUTH_RESP", 4: "HANDOVER_REQ",
                  5: "PREAUTH", 6: "BSM", 7: "HANDOVER_RESP", 8: "ECHO"}
-HIGH_PRIORITY = {"BSM", "BEACON"}       # sent on AC_VO, everything else on AC_BE
-PERIODIC = {"BSM", "BEACON"}            # 10 Hz traffic: TX_/RX_ rows only with --log-bsm
+HIGH_PRIORITY = {"BSM", "BEACON", "TESLA_KEY"}       # sent on AC_VO, everything else on AC_BE
+PERIODIC = {"BSM", "BEACON", "TESLA_KEY"}          # 10 Hz traffic: TX_/RX_ rows only with --log-bsm
 
 
 @dataclass
@@ -63,6 +63,9 @@ class ScenarioEnv:
     rng: random.Random = None
     out_dir: Path = None
     shared: dict = field(default_factory=dict)   # free space for protocol-wide state
+
+    def node_by_id(self, node_id: int) -> NodeHandle:
+        return self._by_id[node_id]
 
     def node(self, name: str) -> NodeHandle:
         for n in self.vehicles + self.rsus:
@@ -126,6 +129,7 @@ class Scenario:
             self.rsus.append(h)
         self.env.vehicles = self.vehicles
         self.env.rsus = self.rsus
+        self.env._by_id = self.node_by_id
 
         # ---- attackers (ground truth written to attackers.csv for evaluation)
         self.attacks: dict[int, Attack] = {}
@@ -169,11 +173,11 @@ class Scenario:
         return DEFAULT_TYPES.get(data[0], f"T{data[0]}") if data else "EMPTY"
 
     # ---------------------------------------------------------------- packets
-    def send(self, h: NodeHandle, dst: int, data: bytes) -> None:
+    def send(self, h: NodeHandle, dst: int, data: bytes, priority: int | None = None) -> None:
         if not h.active:
             return                      # a vehicle that is not on the road has no radio
         mtype = self.msg_type(data)
-        prio = 6 if mtype in HIGH_PRIORITY else 0
+        prio = priority if priority is not None else (6 if mtype in HIGH_PRIORITY else 0)
         expected = None
         if dst == BROADCAST:
             expected = {}

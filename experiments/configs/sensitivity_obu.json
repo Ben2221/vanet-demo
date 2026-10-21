@@ -1,0 +1,44 @@
+{
+  "name": "sensitivity_obu",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "fixed": {
+    "duration": 120,
+    "backend": "ns3",
+    "ledger": "mock",
+    "mobility_step": 0.1,
+    "attacker_ratio": 0.1,
+    "attack": "random_pos",
+    "attack_start": 30,
+    "compute_times": "experiments/compute_times_v3.json",
+    "rsu_cpu": true,
+    "v2v_verify": true,
+    "obu_scale": 5,
+    "privacy_log": true,
+    "vehicles": 150,
+    "protocol": "real"
+  },
+  "grid": {
+    "obu_scale": [
+      1,
+      5,
+      10
+    ]
+  },
+  "variants": [
+    {
+      "label": "Phase-I"
+    },
+    {
+      "label": "v2",
+      "profile": "v2"
+    },
+    {
+      "label": "v3-fast",
+      "profile": "v3-fast"
+    }
+  ]
+}

@@ -29,7 +29,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mobility import fcd_to_ns2, place_rsus
-from mobility.sumo_env import binary, tool
+from mobility.sumo_env import LANECHANGE_ARGS, LANECHANGE_TAG, binary, tool
 
 MOBILITY_DIR = Path(__file__).resolve().parent
 NETS_DIR = MOBILITY_DIR / "nets"
@@ -86,9 +86,10 @@ def resolve_net(net_arg: str, osm: str | None) -> Path:
     return path
 
 
-def scenario_dir(net: Path, vehicles: int, duration: float, seed: int) -> Path:
+def scenario_dir(net: Path, vehicles: int, duration: float, seed: int, step: float = 1.0) -> Path:
     name = net.name.replace(".net.xml", "")
-    return OUT_DIR / f"{name}_v{vehicles}_d{int(duration)}_s{seed}"
+    suffix = "" if step == 1.0 else f"_st{step:g}"     # 1 s scenarios keep their old names
+    return OUT_DIR / f"{name}_v{vehicles}_d{int(duration)}_s{seed}{suffix}{LANECHANGE_TAG}"
 
 
 def rsu_file(d: Path, spacing: float) -> Path:
@@ -99,10 +100,14 @@ def ensure_scenario(vehicles: int = 100, duration: float = 300.0, seed: int = 1,
                     net: str = "grid", osm: str | None = None,
                     rsu_spacing: float = 450.0, rsu_range: float = 300.0,
                     insert_fraction: float = 0.5, traceexporter: bool = False,
-                    force: bool = False, quiet: bool = False) -> dict:
-    """Build (or reuse) a scenario. Returns a dict of paths and counts."""
+                    force: bool = False, quiet: bool = False, step: float = 1.0) -> dict:
+    """Build (or reuse) a scenario. Returns a dict of paths and counts.
+
+    ``step`` is SUMO's step length and the ns-2 waypoint period: between waypoints a
+    node moves in a straight line at constant speed (0.1 s gives smooth acceleration,
+    which matters for dead reckoning)."""
     net_path = resolve_net(net, osm)
-    d = scenario_dir(net_path, vehicles, duration, seed)
+    d = scenario_dir(net_path, vehicles, duration, seed, step)
     meta_file = d / "scenario.json"
     if force and d.exists():
         shutil.rmtree(d)
@@ -129,7 +134,7 @@ def ensure_scenario(vehicles: int = 100, duration: float = 300.0, seed: int = 1,
     <net-file value="{net_path.resolve()}"/>
     <route-files value="{routes.name}"/>
   </input>
-  <time><begin value="0"/><end value="{duration}"/><step-length value="1"/></time>
+  <time><begin value="0"/><end value="{duration}"/><step-length value="{step:g}"/></time>
   <random_number><seed value="{seed}"/></random_number>
   <processing><time-to-teleport value="120"/><ignore-route-errors value="true"/></processing>
   <report><no-step-log value="true"/><no-warnings value="true"/></report>
@@ -137,13 +142,13 @@ def ensure_scenario(vehicles: int = 100, duration: float = 300.0, seed: int = 1,
 """)
         fcd = d / "fcd.xml"
         _run([binary("sumo"), "-c", str(cfg), "--fcd-output", str(fcd),
-              "--fcd-output.geo", "false"], log)
+              "--fcd-output.geo", "false", *LANECHANGE_ARGS], log)
         if traceexporter:
             # SUMO's own exporter, kept for comparison; run_scenario uses trace.ns2
             _run([sys.executable, tool("traceExporter.py"), "--fcd-input", str(fcd),
                   "--ns2mobility-output", str(d / "trace_traceexporter.ns2")], log)
 
-        n = fcd_to_ns2.convert(fcd, d, step=1.0, end_time=duration)
+        n = fcd_to_ns2.convert(fcd, d, step=step, end_time=duration)
         try:   # relative path, so the folder also works when the repo is mounted elsewhere
             net_ref = net_path.resolve().relative_to(MOBILITY_DIR).as_posix()
         except ValueError:
@@ -187,9 +192,10 @@ def main() -> None:
     ap.add_argument("--traceexporter", action="store_true",
                     help="also write SUMO's traceExporter ns-2 file for comparison")
     ap.add_argument("--force", action="store_true", help="rebuild even if cached")
+    ap.add_argument("--step", type=float, default=1.0, help="SUMO step / ns-2 waypoint period in s (default 1)")
     a = ap.parse_args()
     ensure_scenario(a.vehicles, a.duration, a.seed, a.net, a.osm, a.rsu_spacing,
-                    a.rsu_range, a.insert_fraction, a.traceexporter, a.force)
+                    a.rsu_range, a.insert_fraction, a.traceexporter, a.force, step=a.step)
 
 
 if __name__ == "__main__":

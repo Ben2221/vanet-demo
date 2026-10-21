@@ -1,0 +1,189 @@
+\chapter{Proposed Scheme}\label{ch:design}
+
+This chapter describes the scheme as proposed at the Phase~I review and as implemented, called
+\emph{Phase-I} in the evaluation. Chapter~\ref{ch:opt} adds the optimisations.
+
+\section{Architecture and Design Principle}
+
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=1.25cm, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}, lab/.style={font=\scriptsize, align=center}]
+  \node[box, fill=blue!8] (ta) at (0,4.2) {Trusted Authority\\\scriptsize registration, escrow};
+  \node[box, fill=green!8] (ledger) at (7.5,4.2) {Permissioned blockchain\\\scriptsize Hyperledger Fabric};
+  \node[box, fill=orange!10] (rsu1) at (3.2,1.6) {RSU $A$\\\scriptsize verify proof, policy};
+  \node[box, fill=orange!10] (rsu2) at (8.6,1.6) {RSU $B$\\\scriptsize handover, detect};
+  \node[box, fill=gray!10] (v1) at (1.5,-1.2) {Vehicle (OBU)\\\scriptsize pseudonym $\mathit{pid}_i$};
+  \node[box, fill=gray!10] (v2) at (6.8,-1.2) {Vehicle (OBU)};
+  \draw[arr] (ta) -- node[lab, above]{Merkle root,\\policies} (ledger);
+  \draw[arr, dashed] (ta) -- node[lab, left]{pseudonyms,\\keys (offline)} (v1);
+  \draw[arr] (v1) -- node[lab, left]{ZKP login} (rsu1);
+  \draw[arr] (rsu1) -- node[lab, right, pos=0.35]{ticket} (v1);
+  \draw[arr, <->] (rsu1) -- node[lab, left, pos=0.55]{root, policy, auth,\\reports, revocations} (ledger);
+  \draw[arr, <->] (rsu2) -- (ledger);
+  \draw[arr, <->] (rsu1) -- node[lab, above]{PREAUTH, QUARANTINE\\(wired backbone)} (rsu2);
+  \draw[arr] (v1) -- node[lab, below]{signed BSMs (10\,Hz)} (v2);
+  \draw[arr] (v2) -- (rsu2);
+\end{tikzpicture}
+\caption{Entities and the information each exchanges. The blockchain holds only state that several
+RSUs must share and that must be auditable; it is not on the path of individual safety messages.}
+\label{fig:architecture}
+\end{figure}
+
+Figure~\ref{fig:architecture} shows the entities. The guiding principle of the design is that
+\emph{proofs are verified at the edge and the ledger stores only shared state}. An RSU verifies a
+zero-knowledge proof locally in well under a millisecond, while a Fabric commit takes hundreds of
+milliseconds (Section~\ref{sec:res-ledger}). So the ledger is read from a local, regularly
+synchronised copy, written asynchronously, and never waited for while a safety message is handled.
+The ledger stores:
+\begin{itemize}
+  \item the Merkle root of each registration epoch (never a per-vehicle record);
+  \item service policies: which vehicle classes may use which service;
+  \item authorization records keyed by pseudonym, so that the next RSU can accept a handover;
+  \item misbehaviour reports with evidence hashes, and the revocation list;
+  \item trace requests and the RSU organizations' approvals for identity reveal.
+\end{itemize}
+
+\section{Registration}
+
+For each vehicle $v$ the TA generates $P$ pseudonyms (5 by default), each a fresh key pair
+$(x_i, Y_i = x_i G)$ with a random 64-bit identifier $\mathit{pid}_i$, and the vehicle's class
+(\textit{car}, \textit{truck} or \textit{emergency}). It builds the Merkle tree over the leaves of
+all pseudonyms of all vehicles, in shuffled order so that positions do not reveal which pseudonyms
+belong together, and gives each vehicle its keys and Merkle paths over a secure channel. It publishes
+the root with its validity period on the ledger through the chaincode function
+\texttt{RegisterRoot}. Finally it encrypts the vehicle's identity record (identity and list of
+pseudonyms) and escrows the key with the RSU organizations as $t$-of-$n$ Shamir shares, with
+$t = 2f+1$ for $n = 3f+1$ organizations (5 of 9 in the evaluated scenarios).
+
+\section{Authentication}
+
+\begin{figure}[htbp]\centering
+\begin{tikzpicture}[font=\small, >={Latex[length=2mm]}]
+  \node (v) at (0,0) {\textbf{Vehicle}};
+  \node (r) at (6,0) {\textbf{RSU}};
+  \node (l) at (11,0) {\textbf{Ledger}};
+  \draw[gray] (0,-0.3) -- (0,-8.3); \draw[gray] (6,-0.3) -- (6,-8.3); \draw[gray] (11,-0.3) -- (11,-8.3);
+  \draw[->] (6,-0.8) -- node[above, font=\scriptsize]{BEACON: $\mathit{rsu},\ n,\ ts,\ \sigma_{RSU}$ (every 100 ms)} (0,-0.8);
+  \node[align=left, font=\scriptsize, anchor=west] at (0.1,-1.6) {verify beacon; $c = H(G\|Y\|T\|\mathit{ctx})$,\\ $s = r + cx$ with a precomputed $T = rG$};
+  \draw[->] (0,-2.4) -- node[above, font=\scriptsize]{AUTH\_REQ: $\mathit{pid}, Y, \mathit{path}, (T,s), \mathit{svc}, \mathit{class}, n, ts$} (6,-2.4);
+  \node[align=left, font=\scriptsize, anchor=west] at (6.1,-3.35) {nonce fresh, unused\\ Merkle path $\to$ root\\ $sG = T + cY$\\ not revoked, policy allows};
+  \draw[dashed, ->] (11,-3.0) -- node[above, font=\scriptsize]{root, revocations, policy (local copy)} (6,-3.0);
+  \draw[->] (6,-4.6) -- node[above, font=\scriptsize]{AUTH\_RESP: ticket $\{\mathit{pid}, Y, \mathit{svc}, \mathit{class}, \mathit{exp}\}_{\sigma_{RSU}}$} (0,-4.6);
+  \draw[->] (6,-5.4) -- node[above, font=\scriptsize]{RecordAuth (asynchronous)} (11,-5.4);
+  \draw[->] (6,-6.1) -- node[above, font=\scriptsize]{PREAUTH to neighbouring RSUs (backbone)} (9,-6.1);
+  \draw[->] (0,-7.0) -- node[above, font=\scriptsize]{BSM: $\mathit{pid}$, kinematics, ticket (or its digest), $\mathrm{Sig}_{x}$} (6,-7.0);
+  \node[align=left, font=\scriptsize, anchor=west] at (6.1,-7.7) {ticket signature, pid match,\\ BSM signature, detector};
+\end{tikzpicture}
+\caption{Authentication, ticket issue and the first safety message}\label{fig:auth-seq}
+\end{figure}
+
+Figure~\ref{fig:auth-seq} shows the exchange.
+\begin{enumerate}
+  \item Every RSU broadcasts a signed beacon every 100\,ms with its identity, a fresh nonce $n$ and a
+  timestamp. A vehicle accepts only beacons from RSUs whose public keys it holds.
+  \item The vehicle computes the Schnorr response for the current pseudonym with
+  \[\mathit{ctx} = \mathsf{enc}(\texttt{"VANET-AUTH-v1"}, \mathit{rsu}, n, ts, \mathit{svc}, \mathit{pid}, \mathit{class})\]
+  and sends the pseudonym, its public key, the Merkle path, the proof, the requested service and its
+  class.
+  \item The RSU checks that the nonce is one it issued recently and that this (nonce, pseudonym) pair
+  was not used before, rebuilds the leaf and verifies the path against the current root from the
+  ledger, verifies the proof, checks that the pseudonym is neither revoked nor quarantined, and
+  evaluates the authorization predicate
+  \begin{equation}\label{eq:access}
+    \mathrm{Access}(v, \mathit{svc}) = 1 \iff \mathrm{Verify}(\pi, Y) = 1 \;\wedge\; \mathit{pid} \notin \mathit{RL}
+      \;\wedge\; \mathit{class} \in \mathrm{Policy}(\mathit{svc}).
+  \end{equation}
+  \item If access is granted, the RSU signs a ticket over the pseudonym, its key, the service, the
+  class, its own identity and an expiry 30\,s ahead, records the authorization on the ledger
+  asynchronously, and sends a signed PREAUTH note over the backbone to its neighbouring RSUs.
+\end{enumerate}
+The RSU learns the pseudonym, the class and that the vehicle is registered, and nothing else: the
+leaf of another vehicle of the same class looks the same, the proof is zero-knowledge, and the
+Merkle path reveals only the leaf position, which is shuffled.
+
+\section{Handover and Pseudonym Change}
+
+When a vehicle approaches the edge of its RSU's range (80\,\% of the nominal 300\,m) and hears a
+closer RSU, or loses its RSU, it sends a handover request with its ticket, signed with the ticket key
+and bound to the new RSU's beacon nonce. The new RSU checks the issuing RSU's signature on the ticket,
+the request signature and the shared authorization: either the authorization record on the ledger or,
+if the commit has not reached its local copy yet, the PREAUTH note from the issuing RSU. A handover
+needs no new proof. After three sessions a vehicle switches to its next pseudonym and authenticates
+afresh, so that a pseudonym's lifetime stays short.
+
+\section{Safety Messages}
+
+Each BSM carries the pseudonym, the kinematic fields and the ticket, and is signed with the
+pseudonym's secret key, whose public key is in the ticket. A receiver checks the ticket's RSU
+signature, that the ticket's pseudonym matches, the BSM signature and the ticket expiry. The receiver
+needs no certificate chain and no ledger access. In Phase~I every BSM carries the full ticket, which
+makes it about 330 bytes.
+
+\section{Misbehaviour Detection and Reporting}\label{sec:detect}
+
+Every RSU runs a detector on each authentic BSM against that pseudonym's recent history. Hard
+plausibility rules flag positions beyond radio range, speeds above 60\,m/s, accelerations above the
+physical limit, positions inconsistent with the claimed speed, impossible heading flips, replays and
+message rates above 13 per second. Weak rules (sudden appearance close to the RSU, two pseudonyms at
+the same place) count only in pairs. An RSU reports a pseudonym once $K = 3$ of its last $W = 10$
+messages were flagged, with the hash of a flagged, \emph{signed} message as evidence, through the
+chaincode function \texttt{ReportMisbehaviour}.
+
+\section{Revocation and Threshold Identity Reveal}
+
+The chaincode revokes a pseudonym automatically once two distinct RSUs have reported it. A single
+report, perhaps a detector error, therefore has no effect. RSUs see the revocation through their
+local ledger copy and reject the pseudonym's BSMs and logins. An RSU that reported a now-revoked
+pseudonym opens a trace request on the ledger (\texttt{RequestTrace}), and the RSU organizations
+approve it (\texttt{ApproveTrace}). Once $t$ approvals are recorded, each approving organization
+releases its key share, the TA reconstructs the escrow key, decrypts the identity record and revokes
+all of the vehicle's pseudonyms. The vehicle's next login attempt fails and it is shut out. No single
+party can unmask a vehicle: the TA lacks the key, and fewer than $t$ RSU organizations hold too few
+shares.
+
+\section{Ledger Interface}
+
+\begin{table}[htbp]\centering\small
+\caption{Chaincode functions and who may call them}\label{tab:chaincode}
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+Function & Caller & Effect \\
+\midrule
+\texttt{RegisterRoot} & TA & publish the Merkle root of an epoch \\
+\texttt{SetPolicy}, \texttt{SetConfig} & TA & classes allowed per service; $K$, trace threshold \\
+\texttt{RecordAuth} & RSU & authorization record of a pseudonym (rejected if revoked) \\
+\texttt{ReportMisbehaviour} & RSU & report with evidence hash; revoke at $K$ reporters \\
+\texttt{Revoke} & TA & revoke pseudonyms after a trace \\
+\texttt{RequestTrace}, \texttt{ApproveTrace} & RSU & open and approve an identity reveal \\
+\texttt{SetReporterWeight} & TA & report weight of an RSU (Section~\ref{sec:trust}) \\
+\texttt{IsRevoked}, \texttt{GetRoot}, \ldots & any & queries; \texttt{ListRevokedSince} for synchronisation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:chaincode} lists the chaincode functions. The chaincode reads the caller's role from
+its Fabric certificate, so an RSU cannot change a policy and a vehicle cannot write at all. RSUs reach
+Fabric through a REST gateway that signs each transaction with the caller's identity.
+
+\section{Security Analysis}
+
+\begin{itemize}
+  \item \textbf{Impersonation.} An accepting proof requires $x_i$ for a leaf in the registered tree
+  (soundness of the Schnorr proof and collision resistance of the hash). A signed BSM requires the
+  key in an RSU-signed ticket.
+  \item \textbf{Replay.} A login proof is bound to the RSU, a nonce the RSU issued within the
+  freshness window and the pseudonym, and each (nonce, pseudonym) pair is accepted once. BSMs carry a
+  timestamp and sequence number that the detector checks; handover requests are bound to the new
+  RSU's nonce.
+  \item \textbf{Class and service escalation.} The class is part of the Merkle leaf and of the proof
+  context, so claiming another class breaks verification; the policy check (\ref{eq:access}) then
+  decides the service.
+  \item \textbf{Anonymity.} RSUs and vehicles see pseudonyms only, and the proof is zero-knowledge.
+  Linking pseudonyms of one vehicle requires its escrow record, which needs $t$ organizations.
+  \item \textbf{Accountability.} Every revocation and every reveal is a ledger transaction signed by
+  identified organizations, and the ledger is append-only.
+  \item \textbf{Limitations.} The TA knows at registration which pseudonyms belong to which vehicle.
+  The RSUs learn which pseudonym was where, and a global eavesdropper can link consecutive pseudonyms
+  by position. The privacy profile of Chapter~\ref{ch:opt} addresses both.
+\end{itemize}

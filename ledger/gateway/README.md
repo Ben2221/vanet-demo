@@ -9,7 +9,7 @@ reads, and one-time TA revocation.
 
 ## Setup and start
 
-Requirements: Node.js 20 or newer, npm, and the Fabric network already running.
+Requirements: Node.js 22.12 or newer, npm, and the Fabric network already running.
 From the repository root, create a fresh demo network, deploy the final chaincode
 as sequence 1, enroll identities, run the smoke check, and apply the seed with:
 
@@ -28,17 +28,18 @@ npm ci
 FABRIC_HOME=/path/to/fabric-samples npm start
 ```
 
-The server listens on `http://127.0.0.1:3000` by default. For the current
+The server listens on `http://127.0.0.1:3000` by default (`PORT=3100 npm start`,
+or `make gateway PORT=3100` from the repo root, if that port is taken). For a
 Windows checkout where Fabric material is in WSL Ubuntu, Git Bash can use:
 
 ```bash
-FABRIC_HOME=//wsl.localhost/Ubuntu/home/septhis/fabric/fabric-samples npm start
+FABRIC_HOME=//wsl.localhost/Ubuntu/home/<user>/fabric/fabric-samples npm start
 ```
 
 Or from PowerShell:
 
 ```powershell
-$env:FABRIC_HOME = '\\wsl.localhost\Ubuntu\home\septhis\fabric\fabric-samples'
+$env:FABRIC_HOME = '\\wsl.localhost\Ubuntu\home\<user>\fabric\fabric-samples'
 npm start
 ```
 
@@ -55,7 +56,8 @@ Fabric requests and never logs it. Do not commit generated keys or certificates.
 
 ## Identity and trust boundary
 
-Pass one of `ta1`, `rsu1`, `rsu2`, `rsu3`, or `rsu4` in `X-Identity`. When the
+Pass `ta1` or one of `rsu0`–`rsu15` in `X-Identity` (the list is `RSU_IDS` in
+`ledger/network/env.sh`). When the
 header is omitted, TA-only routes default to `ta1` and other routes default to
 `rsu1`. An unknown identity returns 400. This is **not authentication**: a
 caller who can reach this demo gateway can select `ta1` in the header. Keep it
@@ -73,6 +75,7 @@ on a trusted local/demo network; do not expose it as a production service.
 | `POST /auth-records`, `GET /auth-records/:pid`, `GET /auth-records?since=` | Deployed RSU auth writes and active-auth queries |
 | `GET /access-check?pid=&class=&service=` | Deployed policy, revocation, and auth status decision |
 | `POST /reports`, `GET /pseudonyms/:pid`, `GET /revoked?since=`, `GET /revoked/:pid` | Deployed report and revocation functions |
+| `PUT /weights/:rsuId` (TA, `{"weightMilli": 0..1000}`), `GET /weights/:rsuId` | Trust-weighted revocation (`SetReporterWeight` / `GetReporterWeight`, chaincode 1.5): a pseudonym is revoked once its reporters' weights sum to K x 1000; every weight is 1000 until the TA lowers it |
 | `POST /traces`, `GET /traces/:id`, `POST /traces/:id/approve`, `POST /traces/:id/revoke` | Deployed Stage C trace core |
 | `GET /traces?status=`, `POST /traces/:id/shares` | Intentionally not deployed; return 501 `NOT_DEPLOYED` |
 | `GET /snapshot?since=0` | Parallel full/incremental sync snapshot |
@@ -126,8 +129,7 @@ with `LEDGER=mock LEDGER_URL=http://127.0.0.1:3001`; see `ledger/mock/README.md`
 ## Integration handoff
 
 - **Base URL:** `http://127.0.0.1:3000` (`npm start` from `ledger/gateway`).
-- **Caller header:** set `X-Identity` to `ta1`, `rsu1`, `rsu2`, `rsu3`, or
-  `rsu4`. This selects a demo identity; it is not authentication.
+- **Caller header:** set `X-Identity` to `ta1` or one of `rsu0`–`rsu15`. This selects a demo identity; it is not authentication.
 - **Write response:** `{ok, txId, blockNumber, endorseMs, commitMs, totalMs,
   retries, result}`. `commitMs` is gateway wall-clock time from transaction
   submission until the gateway peer reports commit status; it is not simulated

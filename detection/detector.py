@@ -69,16 +69,23 @@ def use_profile(name: str) -> None:
 
 
 HARD = ["range", "speed_range", "pos_jump", "speed_cons", "pos_speed", "heading",
-        "msg_rate", "replay", "sybil"]
+        "msg_rate", "replay", "sybil", "rssi_dist"]
 WEAK = ["sudden_appear", "overlap"]
 INFO = ["foreign"]        # 1: sent by someone other than the pseudonym's owner (a copy); not a rule
 NUMERIC = ["d_rsu", "speed", "dt", "implied_speed", "implied_base", "speed_err", "speed_err_cur",
-           "accel", "heading_delta", "rate"]
+           "accel", "heading_delta", "rate", "rssi_z"]
 FEATURES = HARD + WEAK + INFO + NUMERIC
 
 use_profile(os.environ.get("VANET_PROFILE", "scenario"))
 
-MODEL_PATH = Path(__file__).resolve().parent / "models" / "rf.joblib"
+MODEL_PATH = Path(os.environ.get("VANET_MODEL") or Path(__file__).resolve().parent / "models" / "rf.joblib")
+ML_THRESHOLD = float(os.environ.get("VANET_ML_THRESHOLD", "0.5"))
+# signal-strength distance check: the receiver's distance estimate from received power
+# ("rssi_d", optional input) and its uncertainty ("rssi_sigma", standard deviation of
+# ln(distance) from shadowing) vs the distance to the claimed position. Flag when
+# |ln(claimed / estimate)| > RSSI_Z sigmas AND they differ by more than RSSI_MIN_DIFF metres
+# (an honest message trips 4 sigma about 6 times in 100 000).
+RSSI_Z, RSSI_MIN_DIFF = 4.0, 100.0
 
 
 # ------------------------------------------------------- cross-pseudonym state
@@ -153,6 +160,7 @@ def normalize(b: dict) -> dict:
     return {"pid": str(b.get("pid", "")), "seq": fl.get("seq"), "t": t, "x": float(fl["x"]),
             "y": float(fl["y"]), "speed": float(fl["speed"]), "heading": float(fl.get("heading", 0.0)),
             "rsu_x": fl.get("rsu_x"), "rsu_y": fl.get("rsu_y"), "rx_time": float(fl.get("rx_time", t)),
+            **({k: fl[k] for k in ("rssi_d", "rssi_sigma") if k in fl}),
             "sender": fl.get("sender")}
 
 
@@ -183,6 +191,12 @@ def rule_features(bsm: dict, history: list[dict]) -> dict:
     d_rsu = math.hypot(x - bsm["rsu_x"], y - bsm["rsu_y"]) if has_rsu else 0.0
     f["d_rsu"] = d_rsu
     f["speed"] = v
+    rssi_d, sigma = bsm.get("rssi_d"), bsm.get("rssi_sigma")
+    if has_rsu and rssi_d and rssi_d > 0 and sigma and sigma > 0:
+        claimed = max(d_rsu, 1.0)
+        f["rssi_z"] = abs(math.log(claimed / rssi_d)) / sigma
+        if f["rssi_z"] > RSSI_Z and abs(claimed - rssi_d) > RSSI_MIN_DIFF:
+            f["rssi_dist"] = 1
     if has_rsu and d_rsu > MAX_RANGE:
         f["range"] = 1
     if v > MAX_SPEED or v < 0:
@@ -282,6 +296,16 @@ def _load_model():
     return _model
 
 
+class ThresholdModel:
+    """A trained classifier with the decision threshold chosen for it (detection/train_sim.py)."""
+
+    def __init__(self, model, threshold: float, info: dict | None = None) -> None:
+        self.model, self.threshold, self.info = model, float(threshold), info or {}
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
+
+
 def feature_vector(f: dict) -> list[float]:
     return [float(f[k]) for k in FEATURES]
 
@@ -293,10 +317,15 @@ def check(bsm: dict, history: list[dict]) -> tuple[bool, dict]:
         f = rule_features(bsm, history)
     except (KeyError, TypeError, ValueError, StopIteration) as exc:
         return False, {"error": f"unreadable_bsm: {exc!r}"}
-    if os.environ.get("VANET_DETECTOR", "rules") == "ml":
+    mode = os.environ.get("VANET_DETECTOR", "rules")
+    if mode in ("ml", "hybrid"):
         model = _load_model()
         if model is not None:
             p = float(model.predict_proba([feature_vector(f)])[0][1])
             f["ml_score"] = p
-            return p >= 0.5, f
+            thr = getattr(model, "threshold", ML_THRESHOLD)
+            if mode == "ml":
+                return p >= thr, f
+            # hybrid: the rules catch the physically impossible, the model the subtle cases
+            return rules_flag(f) or p >= thr, f
     return rules_flag(f), f

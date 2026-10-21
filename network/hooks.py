@@ -90,14 +90,16 @@ class NodeHandle:
         return f"<{self.kind} {self.name} node={self.id}>"
 
     # -------------------------------------------------------------- the hooks
-    def send(self, destination: int | str, data: bytes, delay: float = 0.0) -> None:
-        """Send bytes to a node id / RSU name, or BROADCAST. delay = processing time."""
+    def send(self, destination: int | str, data: bytes, delay: float = 0.0, priority: int | None = None) -> None:
+        """Send bytes to a node id / RSU name, or BROADCAST. delay = processing time.
+        priority: 802.1d user priority (0-7, mapped to an EDCA access category); by default
+        BSMs, beacons and TESLA keys go on AC_VO and everything else on AC_BE."""
         if isinstance(destination, str):
             destination = self._sc.node_by_name[destination].id
         if delay > 0:
-            self._sc.backend.schedule(delay, lambda: self._sc.send(self, destination, data))
+            self._sc.backend.schedule(delay, lambda: self._sc.send(self, destination, data, priority))
         else:
-            self._sc.send(self, destination, data)
+            self._sc.send(self, destination, data, priority)
 
     def backbone_send(self, destination: int | str, data: bytes, delay: float = 0.0) -> None:
         """RSU only: send bytes to another RSU over the wired backbone (not the radio).
@@ -120,6 +122,10 @@ class NodeHandle:
 
     def velocity(self) -> tuple[float, float]:
         return self._sc.backend.velocity(self.id)
+
+    def peer_position(self, node_id: int) -> tuple[float, float]:
+        """Position of another node (e.g. the sender of a received packet)."""
+        return self._sc.backend.position(node_id)
 
     def speed(self) -> float:
         return math.hypot(*self.velocity())

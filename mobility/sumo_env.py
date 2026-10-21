@@ -52,3 +52,11 @@ def add_tools_to_path() -> None:
     tools = str(sumo_home() / "tools")
     if tools not in sys.path:
         sys.path.append(tools)
+
+
+# SUMO moves a car to the next lane in one step by default: a 3.2 m sideways jump in 0.1 s,
+# which the ns-2 trace turns into a ~32 m/s velocity for that step (a stopped car "claims"
+# 32 m/s, and the misbehaviour detector rightly flags it). Changing lanes over 2 s, as real
+# drivers do, removes these spikes. Scenario folders built this way end in LANECHANGE_TAG.
+LANECHANGE_ARGS = ["--lanechange.duration", "2"]
+LANECHANGE_TAG = "_lc2"

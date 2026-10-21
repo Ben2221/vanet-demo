@@ -16,8 +16,8 @@ check_identity() {
 }
 
 check_identity 1 ta1 TA
-for n in 1 2 3 4; do
-  check_identity 2 "rsu$n" RSU
+for rsu in "${RSU_IDS[@]}"; do
+  check_identity 2 "$rsu" RSU
 done
 
 echo "SMOKE TEST PASSED"

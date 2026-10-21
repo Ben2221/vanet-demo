@@ -1,0 +1,17 @@
+\begin{table}[htbp]\centering\scriptsize
+\caption{Grid scenario, 150 vehicles: latency and overhead (ns-3, mean $\pm$ 95\,\% CI over 5 seeds)}\label{tab:compare}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+Variant & \rotatebox{70}{Ticket (ms)} & \rotatebox{70}{Handover (ms)} & \rotatebox{70}{BSM size (B)} & \rotatebox{70}{Safety traffic (B/s)} & \rotatebox{70}{PDR} & \rotatebox{70}{CBR} & \rotatebox{70}{V2V accept (ms)} \\
+\midrule
+Phase-I & 2.54 $\pm$ 0.13 & 2.97 $\pm$ 0.16 & 333 $\pm$ 0 & 3097 $\pm$ 27 & 0.959 $\pm$ 0.003 & 0.258 $\pm$ 0.003 & 1.74 $\pm$ 0.03 \\
+v2 & 2.17 $\pm$ 0.08 & 1.63 $\pm$ 0.10 & 139 $\pm$ 0 & 1289 $\pm$ 13 & 0.978 $\pm$ 0.002 & 0.151 $\pm$ 0.002 & 0.96 $\pm$ 0.01 \\
+v2-mac & 2.13 $\pm$ 0.15 & 1.60 $\pm$ 0.09 & 112 $\pm$ 0 & 1038 $\pm$ 9 & 0.980 $\pm$ 0.002 & 0.136 $\pm$ 0.002 & 1.27 $\pm$ 0.03 \\
+v3-fast & 1.62 $\pm$ 0.04 & 1.42 $\pm$ 0.12 & 155 $\pm$ 0 & 301 $\pm$ 7 & 0.995 $\pm$ 0.000 & 0.046 $\pm$ 0.001 & 0.93 $\pm$ 0.00 \\
+v3-private & 7.46 $\pm$ 0.37 & 1.90 $\pm$ 0.30 & 157 $\pm$ 0 & 246 $\pm$ 5 & 0.995 $\pm$ 0.001 & 0.044 $\pm$ 0.001 & 0.94 $\pm$ 0.00 \\
+ECDSA-PKI & 1.92 $\pm$ 0.35 & 1.67 $\pm$ 0.24 & 117 & 1170 $\pm$ 0 & 0.977 $\pm$ 0.002 & 0.148 $\pm$ 0.004 & -- \\
+Central-TA & 22.47 $\pm$ 0.21 & 22.35 $\pm$ 0.18 & 117 & 1170 $\pm$ 0 & 0.977 $\pm$ 0.002 & 0.147 $\pm$ 0.003 & -- \\
+\bottomrule
+\end{tabular}}
+\end{table}

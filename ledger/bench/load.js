@@ -1,8 +1,8 @@
 const { randomBytes } = require('node:crypto');
 
 const baseUrl = (process.env.GATEWAY_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
-const durationSeconds = 30;
-const targetRates = [5, 10, 20];
+const durationSeconds = Number(process.env.BENCH_SECONDS || 30);
+const targetRates = (process.env.BENCH_RATES || '5,10,20').split(',').map(Number);
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 function percentile(values, fraction) {

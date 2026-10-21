@@ -1,0 +1,244 @@
+\chapter{Results and Discussion}\label{ch:results}
+
+This chapter reports the evaluation. All network results come from ns-3. Each configuration runs with
+several seeds, which change SUMO's trips, the choice of attackers and the radio's randomness. Tables
+give the mean and the 95\,\% confidence interval over the seeds.
+
+\section{Experimental Setup}
+
+\begin{table}[htbp]\centering\small
+\caption{Common parameters of the network experiments}\label{tab:setup}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lp{8.5cm}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+Simulated time per run & 120\,s (180\,s for the compromised-RSU study) \\
+Scenarios & grid with 50, 100, 150 vehicles; LuST at 06:00, 14:00, 08:00 \\
+RSUs & 9 (grid, 450\,m apart), 300\,m nominal range \\
+Seeds & 5 (grid comparison), 10 (compromised RSUs), 3 (others) \\
+Attackers & 10\,\% of the vehicles, random position offsets from 30\,s \\
+Reports to revoke ($K$), reveal threshold & 2 RSUs; 5 of 9 organizations \\
+Ticket lifetime, pseudonyms per vehicle & 30\,s; 5 (20 with mix zones) \\
+Ledger in sweeps & in-process, 500\,ms commit (Section~\ref{sec:res-ledger}) \\
+Processors & RSU at measured speed, vehicle 5$\times$ slower \\
+Vehicle verification & BSMs of senders within 100\,m \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Table~\ref{tab:setup} lists the common parameters. The compared variants are the Phase~I scheme, its
+optimised profiles (Table~\ref{tab:profiles}) and the two baselines of Section~\ref{sec:eval-framework}.
+
+\textbf{Metrics.}
+\begin{itemize}
+  \item \emph{Ticket}: time from sending a login (or renewal) to holding a valid ticket. \emph{Ticket
+  after 10\,s} leaves out the start of a run.
+  \item \emph{Safety traffic}: BSM and TESLA-key bytes per vehicle per second.
+  \item \emph{PDR}: share of broadcasts received by the nodes within 300\,m of the sender.
+  \item \emph{CBR}: channel busy ratio measured at the RSUs.
+  \item \emph{V2V accept}: time from sending a BSM to a neighbouring vehicle accepting it.
+  \item \emph{Revoked accepted}: share of BSMs from revoked senders that vehicles still accepted.
+  \item \emph{Caught}: share of attackers reported to the ledger.
+  \item \emph{Honest revoked}: honest vehicles that lost a pseudonym to revocation.
+  \item \emph{Tracked}: share of pseudonym changes the eavesdropper links correctly.
+\end{itemize}
+
+\section{Comparison on the Grid}\label{sec:res-grid}
+
+\gentab{tab_compare}
+\gentab{tab_compare_sec}
+
+Tables~\ref{tab:compare} and~\ref{tab:compare-sec} compare all variants at \R{cmp}{vehicles}
+vehicles, and Figure~\ref{fig:grid} shows the trends over vehicle density.
+
+\textbf{Latency.} The Phase~I scheme issues a ticket in \R{cmp/Phase-I}{ticket_ms_mean}\,ms,
+v3-fast in \R{cmp/v3-fast}{ticket_ms_mean}\,ms (\R{cmp/derived}{ticket_ms_mean_cut_pct}\,\% less),
+and the ECDSA-PKI baseline in \R{cmp/ECDSA-PKI}{ticket_ms_mean}\,ms. The zero-knowledge login is
+therefore as fast as presenting a certificate. Centralising the decision (Central-TA) costs
+\R{cmp/Central-TA}{ticket_ms_mean}\,ms, because every login crosses the backbone and queues at one
+authority. A vehicle accepts a neighbour's BSM after \R{cmp/v3-fast}{v2v_accept_ms_mean}\,ms with
+v3-fast against \R{cmp/Phase-I}{v2v_accept_ms_mean}\,ms with Phase-I: smaller messages spend less
+time on the air, and the vehicle processor has less to verify.
+
+\textbf{Channel load.} This is the largest effect. Phase-I's \R{cmp/Phase-I}{bsm_bytes}-byte BSMs at
+10\,Hz put \R{cmp/Phase-I}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel. v3-fast sends
+\R{cmp/v3-fast}{safety_bytes_per_vehicle_s}\,B/s, \R{cmp/derived}{safety_factor} times less, by
+combining smaller messages with dead-reckoning triggering. The channel busy ratio falls from
+\R{cmp/Phase-I}{cbr_rsu_mean} to \R{cmp/v3-fast}{cbr_rsu_mean}, and the delivery ratio rises from
+\R{cmp/Phase-I}{pdr} to \R{cmp/v3-fast}{pdr} because fewer frames collide.
+
+\textbf{Revocation.} Without information from the ledger, vehicles in Phase-I accepted every BSM from
+revoked senders (\R{cmp/Phase-I}{v2v_revoked_accepted_ratio}). With the revocation filter in RSU
+beacons, v3-fast vehicles accepted \R{cmp/v3-fast}{v2v_revoked_accepted_ratio}. Every variant caught
+every attacker, and no honest vehicle was revoked.
+
+\textbf{Privacy.} Without mix zones, the eavesdropper links \R{cmp/v3-fast}{tracking_success} of the
+pseudonym changes, because a pseudonym change alone does not hide a vehicle's trajectory. v3-private
+lowers this to \R{cmp/v3-private}{tracking_success}, at the price of a ticket time of
+\R{cmp/v3-private}{ticket_ms_mean}\,ms, the cost of the BBS proof.
+
+\gentab{tab_significance}
+
+Table~\ref{tab:significance} tests the differences: a bold entry means that the difference between
+the challenger and Phase-I is significant at the 5\,\% level (Welch's t-test over the seeds).
+
+\begin{figure}[htbp]\centering
+\genfig[\textwidth]{grid_overview}
+\caption{Grid scenario over vehicle density (mean and 95\,\% CI over 5 seeds)}\label{fig:grid}
+\end{figure}
+
+\gentab{tab_compare_all}
+
+\section{Real Traffic: LuST}\label{sec:res-lust}
+
+\gentab{tab_lust}
+
+\begin{figure}[htbp]\centering
+\genfig[\textwidth]{lust_overview}
+\caption{LuST traffic at three times of day (mean and 95\,\% CI over 3 seeds)}\label{fig:lust}
+\end{figure}
+
+Table~\ref{tab:lust} and Figure~\ref{fig:lust} repeat the comparison on real Luxembourg traffic. Two differences from the grid
+matter. First, a cut of real traffic starts with hundreds of vehicles already on the road, which all
+log in during the first seconds. The RSUs' processors keep up (a login costs them well under a
+millisecond), but the radio does not: hundreds of login requests of about 680 bytes, each with its
+Merkle path and proof, and the RSUs' ticket responses compete for the channel and wait in the 802.11p
+queues. In a 15\,s run of the 08:00 peak, a login request spent about 110\,ms and a ticket response
+about 240\,ms on the air during the first three seconds. The mean ticket time therefore includes
+this start-up burst. The ticket time after 10\,s shows the steady state: in the
+08:00 peak, v3-fast issues tickets in \R{lust:peak/v3-fast}{ticket_ms_steady_mean}\,ms once the
+burst has passed. Second, real roads with many lanes and junctions give more manoeuvres, so
+dead-reckoning triggering saves less than on the grid. At the peak, v3-fast still puts
+\R{lust:peak/v3-fast}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel against
+\R{lust:peak/Phase-I}{safety_bytes_per_vehicle_s}\,B/s for Phase-I, with channel busy ratios of
+\R{lust:peak/v3-fast}{cbr_rsu_mean} and \R{lust:peak/Phase-I}{cbr_rsu_mean}.
+
+\section{Ablation: What Each Mechanism Contributes}\label{sec:res-ablation}
+
+\gentab{tab_ablation}
+
+Table~\ref{tab:ablation} starts from v2 and adds one mechanism at a time. It separates the
+mechanisms that reduce bytes on the air (TESLA, implicit certificates, dead reckoning) from those
+that reduce latency or handovers (clusters, renewal, batch verification under load), and those that
+change security properties (revocation filter, signal-strength check) or privacy (BBS, mix zones).
+For example, TESLA alone brings the safety traffic from \R{abl/v2}{safety_bytes_per_vehicle_s} to
+\R{abl/v2 +tesla}{safety_bytes_per_vehicle_s}\,B/s, dead reckoning alone to
+\R{abl/v2 +dead-reckoning}{safety_bytes_per_vehicle_s}\,B/s, and the revocation filter alone lowers
+the share of BSMs from revoked senders that vehicles accept from
+\R{abl/v2}{v2v_revoked_accepted_ratio} to \R{abl/v2 +revocation-filter}{v2v_revoked_accepted_ratio}.
+The learned detector in hybrid mode is listed for completeness. It is not part of the profiles: a model
+trained on one road network flagged honest vehicles on another, whereas the rules and the
+signal-strength check transfer across cities.
+
+\section{Misbehaviour Detection}\label{sec:res-detect}
+
+\gentab{tab_veremi}
+
+On VeReMi Extension (\R{veremi}{messages} messages from \R{veremi}{vehicles} vehicles,
+Table~\ref{tab:veremi}), the plausibility rules alone reach an F1 score of \R{veremi}{rules_f1} with
+no false positives. They miss subtle attacks such as small constant offsets, which stay within
+physical limits. Learned models over the same features reach \R{veremi}{rf_f1} (random forest), and
+gradient boosting with a history window \R{veremi}{hgb_window_f1} at a false-positive rate of
+\R{veremi}{hgb_window_fpr}.
+
+\gentab{tab_sensitivity_attack}
+\gentab{tab_sensitivity_attackers}
+
+In the simulation, Tables~\ref{tab:sensitivity-attack} and~\ref{tab:sensitivity-attackers} show
+detection per attack type and for an increasing share of attackers. The two-report rule matters
+here: a single RSU's false alarm has no consequence, so honest vehicles keep their pseudonyms even
+when one RSU misjudges them.
+
+\section{Compromised RSUs}\label{sec:res-trust}
+
+\gentab{tab_trust}
+
+Table~\ref{tab:trust} lets a quarter of the RSUs report random honest pseudonyms every 5\,s. With
+plain $K = 2$ counting, two compromised RSUs together can revoke an honest pseudonym. With
+trust-weighted reports, an RSU's weight falls once investigations show its reports were wrong,
+after which its reports no longer suffice to revoke anyone. The table compares honest vehicles
+revoked with and without weighting, and checks that attackers are still caught.
+
+\section{Privacy}\label{sec:res-privacy}
+
+\gentab{tab_mixzone_tradeoff}
+
+\begin{figure}[htbp]\centering
+\genfig[\textwidth]{mixzone}
+\caption{Mix zones: longest silent period (s) against tracking and silence}\label{fig:mixzone}
+\end{figure}
+
+Pseudonym changes alone do not stop a global eavesdropper. In the grid comparison, the tracker links
+\R{cmp/v3-fast}{tracking_success} of the changes made without mix zones. Table~\ref{tab:mixzone-tradeoff}
+varies the longest silent period of the cooperative mix zones. Longer silence makes linking harder,
+but a silent vehicle is invisible to its neighbours, so the table also reports the share of time
+vehicles were silent and the 95th percentile of the position error neighbours see. This is the
+safety--privacy trade-off that a deployment has to set.
+
+\section{Blockchain Performance}\label{sec:res-ledger}
+
+\gentab{tab_ledger}
+
+Table~\ref{tab:ledger} measures the real Fabric~3.1.5 network under a steady load of
+\texttt{RecordAuth} transactions, the most frequent write. With Raft and Fabric's default 500\,ms
+batch timeout, the median commit takes \R{ledger}{raft_500ms_5_p50}\,ms, dominated by waiting for the
+block to be cut. With a 50\,ms timeout, Raft commits in \R{ledger}{raft_50ms_5_p50}\,ms and SmartBFT
+in \R{ledger}{bft_50ms_5_p50}\,ms at 5 transactions per second. At 20 per second, Byzantine fault
+tolerance costs more: SmartBFT's median rises to \R{ledger}{bft_50ms_20_p50}\,ms against
+\R{ledger}{raft_50ms_20_p50}\,ms for Raft. No transaction failed. These latencies confirm the design
+principle: a commit takes tens to hundreds of milliseconds, too slow for the path of a safety message,
+but fast enough for authorization records and revocations, which the RSUs bridge with PREAUTH notes
+and quarantine.
+
+\section{Sensitivity to the Vehicle Processor}\label{sec:res-sens}
+
+\gentab{tab_sensitivity_obu}
+
+The speed of real on-board units varies widely: software implementations on embedded processors
+verify tens of signatures per second, while units with a cryptographic accelerator verify thousands.
+Instead of relying on a single assumed factor, Table~\ref{tab:sensitivity-obu} repeats the comparison
+with vehicle processors as fast as the development PC, 5 times slower, and 10 times slower.
+
+\section{Emergency Vehicles}\label{sec:res-emergency}
+
+\gentab{tab_emergency}
+
+\begin{figure}[htbp]\centering
+\genfig[\textwidth]{emergency}
+\caption{Emergency vehicles on LuST: ticket times and warning coverage}\label{fig:emergency}
+\end{figure}
+
+Table~\ref{tab:emergency} evaluates the extension of Section~\ref{sec:emergency} on LuST traffic, where
+the start-up burst creates long radio queues at the RSUs. It compares the ticket time of emergency vehicles with
+that of all other vehicles, with and without the priority lane. It also reports the share of vehicles
+within 300\,m of an emergency vehicle that held a verified alert from it at most 1\,s old, the alert
+delay, and the outcome of the fake-emergency attack. The design requirement is that no fake alert is
+ever accepted, and that every fake emergency login is denied by the policy or rejected because the
+pseudonym is already quarantined.
+
+\section{Discussion}
+
+The research question of the Phase~I review asked whether ZKP authentication combined with
+permissioned-blockchain authorization can work without unacceptable latency, computation or
+communication overhead. On the measured network the answer is yes, under two conditions. First, the
+ledger must stay off the safety-message path. Proofs are verified at the RSU in a fraction of a
+millisecond, while ledger commits take tens to hundreds of milliseconds and are bridged by
+PREAUTH and quarantine. Second, per-message authentication must be cheap. The Phase~I design was
+dominated by its 330-byte BSMs; the optimised profile is \R{cmp/derived}{safety_factor} times lighter
+on the channel and faster than the certificate baseline, without weakening the security model.
+
+\textbf{Threats to validity.}
+\begin{itemize}
+  \item Radio and traffic are simulated. ns-3 and SUMO are the accepted tools for this purpose, and
+  LuST adds real traffic, but no field test was done.
+  \item Processing costs were measured on a PC and scaled for vehicles. The processor sensitivity
+  sweep bounds the effect.
+  \item The parameter sweeps use an in-process ledger with the measured Raft commit time, and the
+  real Fabric network was measured separately on one machine. A wide-area deployment adds network
+  latency to commits.
+  \item The investigation that drives trust weights is simulated with ground truth.
+  \item Attackers follow the VeReMi attack types and a fake-emergency attack. Adaptive attackers who
+  stay just inside the plausibility limits are harder to detect, as the VeReMi results for small
+  offsets show.
+\end{itemize}

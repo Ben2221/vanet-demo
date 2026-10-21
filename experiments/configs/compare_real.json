@@ -1,0 +1,13 @@
+{
+  "name": "compare_real",
+  "seeds": [1, 2, 3],
+  "fixed": {"duration": 120, "backend": "lite", "ledger": "mock", "attacker_ratio": 0.0,
+            "compute_times": "experiments/compute_times_all.json"},
+  "grid": {"vehicles": [50, 100, 150]},
+  "variants": [
+    {"protocol": "real"},
+    {"protocol": "stub"},
+    {"protocol": "experiments.baselines.ecdsa_pki"},
+    {"protocol": "experiments.baselines.central_auth"}
+  ]
+}

@@ -93,7 +93,13 @@ func (c *VanetAuth) ReportMisbehaviour(ctx contractapi.TransactionContextInterfa
 	}
 	reportCount, reporters, firstReportTs := summarizeReports(reports, caller.ID, now)
 
-	newlyRevoked := reportCount >= configuration.K
+	// weights default to full (1000 each), so this is reportCount >= K unless the TA
+	// lowered an RSU's weight (weights.go)
+	weight, err := weightSum(ctx.GetStub(), reporters)
+	if err != nil {
+		return ReportResult{}, err
+	}
+	newlyRevoked := weight >= configuration.K*fullWeight
 	if newlyRevoked {
 		revKey, err := revocationKey(ctx.GetStub(), pid)
 		if err != nil {

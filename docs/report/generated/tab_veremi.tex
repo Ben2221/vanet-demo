@@ -1,0 +1,15 @@
+\begin{table}[htbp]\centering\small
+\caption{Misbehaviour detection on VeReMi Extension (5 vehicle-disjoint splits)}\label{tab:veremi}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Detector & F1 & FPR & ROC AUC & Attackers reported \\
+\midrule
+Plausibility rules & 0.718 $\pm$ 0.022 & 0.0000 & -- & 0.638 \\
+Random forest & 0.952 $\pm$ 0.004 & 0.0043 & 0.960 & 0.867 \\
+Gradient boosting & 0.952 $\pm$ 0.003 & 0.0027 & 0.960 & 0.867 \\
+Gradient boosting + history window & 0.963 $\pm$ 0.003 & 0.0018 & 0.969 & 0.870 \\
+\quad + calibrated threshold & 0.963 $\pm$ 0.003 & 0.0018 & 0.968 & 0.870 \\
+\bottomrule
+\end{tabular}}
+\end{table}

@@ -4,6 +4,9 @@
   "private": true,
   "description": "REST gateway for the VANET Fabric demo ledger",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "node server.js"
   },

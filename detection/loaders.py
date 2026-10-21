@@ -31,6 +31,17 @@ import math
 from pathlib import Path
 from typing import Iterable, Iterator
 
+# VeReMi Extension (Kamel et al. 2020, F2MD): "class" column, 0 = genuine, 1-19 = attacks.
+# Checked against the Mendeley release (mixalldata_clean.csv, 3,194,808 messages): DoS classes
+# 13-15 have ~3x the messages of the others and GridSybil (16) the most, as expected.
+VEREMI_EXT_CLASSES = {
+    0: "honest", 1: "const_pos", 2: "const_pos_offset", 3: "random_pos", 4: "random_pos_offset",
+    5: "const_speed", 6: "const_speed_offset", 7: "random_speed", 8: "random_speed_offset",
+    9: "eventual_stop", 10: "disruptive", 11: "replay", 12: "delayed_messages", 13: "dos",
+    14: "dos_random", 15: "dos_disruptive", 16: "grid_sybil", 17: "replay_sybil",
+    18: "dos_random_sybil", 19: "dos_disruptive_sybil",
+}
+
 # attack-name normalisation: VeReMi numbers and NextGen names -> our names
 VEREMI_TYPES = {0: "honest", 1: "const_pos", 2: "const_pos_offset", 4: "random_pos",
                 8: "random_pos_offset", 16: "eventual_stop"}
@@ -97,7 +108,7 @@ def _vec(v) -> tuple[float, float] | None:
 def from_record(rec: dict, own_pos: tuple[float, float] = (0.0, 0.0),
                 vehicle_attack: dict | None = None) -> dict | None:
     """One raw record (CSV row or JSON object) -> message dict, or None if it is not a BSM."""
-    if rec.get("type") not in (None, 3, "3"):         # VeReMi: type 2 is the receiver's own GPS
+    if rec.get("type") in (2, "2"):                   # VeReMi: type 2 is the receiver's own GPS
         return None
     pos, spd, hed = _vec(rec.get("pos")), _vec(rec.get("spd")), _vec(rec.get("hed"))
     x = pos[0] if pos else _first(rec, "x")
@@ -127,8 +138,14 @@ def from_record(rec: dict, own_pos: tuple[float, float] = (0.0, 0.0),
         attack = _first(rec, "attack")
     if attack is None and vehicle_attack is not None:
         attack = vehicle_attack.get(str(sender))
-    name = normalise_attack(attack)
+    if attack is None and rec.get("class") not in (None, ""):
+        n = int(float(rec["class"]))                  # VeReMi Extension
+        name = VEREMI_EXT_CLASSES.get(n, f"attack_{n}")
+    else:
+        name = normalise_attack(attack)
     rx, ry = _first(rec, "rx"), _first(rec, "ry")
+    # no receiver position in the data (VeReMi Extension): leave it out, so the checks
+    # that need it (distance to the receiver) are skipped instead of using a fake (0, 0)
     rsu = (float(rx), float(ry)) if rx is not None and ry is not None else own_pos
     return {"pid": pid, "seq": int(float(_first(rec, "seq") or 0)), "t": float(t), "x": float(x),
             "y": float(y), "speed": float(speed), "heading": float(heading), "rsu_x": rsu[0],
@@ -155,11 +172,22 @@ def load_jsonl(path: str | Path, vehicle_attack: dict | None = None) -> Iterator
                 yield m
 
 
-def load_csv(path: str | Path, vehicle_attack: dict | None = None) -> Iterator[dict]:
-    """VeReMi Extension style: one CSV row per received message."""
+def keep_sender(sender, fraction: float) -> bool:
+    """Deterministic sample of whole vehicles (a message sample would split a vehicle's history)."""
+    if fraction >= 1.0:
+        return True
+    import zlib
+    return zlib.crc32(str(sender).encode()) % 10_000 < fraction * 10_000
+
+
+def load_csv(path: str | Path, vehicle_attack: dict | None = None, sample: float = 1.0) -> Iterator[dict]:
+    """VeReMi Extension style: one CSV row per received message. ``sample`` keeps that
+    fraction of the sender vehicles (all of their messages)."""
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
-            m = from_record(row, (0.0, 0.0), vehicle_attack)
+            if sample < 1.0 and not keep_sender(row.get("sender"), sample):
+                continue
+            m = from_record(row, (None, None), vehicle_attack)
             if m:
                 yield m
 
@@ -174,17 +202,17 @@ def load_json(path: str | Path, vehicle_attack: dict | None = None) -> Iterator[
             yield m
 
 
-def load(path: str | Path, vehicle_attack: dict | None = None) -> list[dict]:
+def load(path: str | Path, vehicle_attack: dict | None = None, sample: float = 1.0) -> list[dict]:
     """Pick the reader from the file name; a folder loads every .json/.jsonl/.csv inside it."""
     p = Path(path)
     if p.is_dir():
         out: list[dict] = []
         for q in sorted(p.rglob("*")):
             if q.suffix in (".json", ".jsonl", ".csv") and q.name.lower() != "groundtruth.json":
-                out += load(q, vehicle_attack)
+                out += load(q, vehicle_attack, sample)
         return out
     if p.suffix == ".csv":
-        return list(load_csv(p, vehicle_attack))
+        return list(load_csv(p, vehicle_attack, sample))
     if p.suffix == ".json":
         try:
             return list(load_json(p, vehicle_attack))

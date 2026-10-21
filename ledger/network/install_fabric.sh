@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FABRIC_VERSION="${FABRIC_VERSION:-2.5.9}"
+FABRIC_VERSION="${FABRIC_VERSION:-2.5.16}"
 FABRIC_INSTALL_ROOT="${FABRIC_INSTALL_ROOT:-$HOME/fabric}"
 LOCAL_BIN="$HOME/.local/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,13 +36,18 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 chmod +x "$SCRIPT_DIR/go"
-ln -sf "$SCRIPT_DIR/go" "$LOCAL_BIN/go"
+# Fabric's deployCC needs `go`. Use the Docker-based wrapper only when there is no real
+# Go toolchain, so an existing install is never shadowed.
+if ! command -v go >/dev/null 2>&1 || [[ "$(readlink -f "$(command -v go)")" == "$(readlink -f "$SCRIPT_DIR/go")" ]]; then
+  ln -sf "$SCRIPT_DIR/go" "$LOCAL_BIN/go"
+fi
 export PATH="$LOCAL_BIN:$PATH"
 
 mkdir -p "$FABRIC_INSTALL_ROOT"
 if [[ -x "$FABRIC_INSTALL_ROOT/fabric-samples/test-network/network.sh" && \
       -x "$FABRIC_INSTALL_ROOT/fabric-samples/bin/peer" && \
-      -x "$FABRIC_INSTALL_ROOT/fabric-samples/bin/fabric-ca-client" ]]; then
+      -x "$FABRIC_INSTALL_ROOT/fabric-samples/bin/fabric-ca-client" ]] && \
+   "$FABRIC_INSTALL_ROOT/fabric-samples/bin/peer" version | grep -q "Version: v$FABRIC_VERSION\$"; then
   echo "Fabric already installed at $FABRIC_INSTALL_ROOT/fabric-samples; skipping download."
 else
   cd "$FABRIC_INSTALL_ROOT"

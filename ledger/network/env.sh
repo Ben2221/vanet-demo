@@ -9,6 +9,10 @@ export FABRIC_CFG_PATH="$FABRIC_HOME/config"
 export CORE_PEER_TLS_ENABLED=true
 export CHANNEL="${CHANNEL:-vanetchannel}"
 export CC_NAME="${CC_NAME:-vanetauth}"
+# RSU client identities enrolled on Org2. The scenario names its RSUs rsu0, rsu1, ...
+# (16 covers every grid config, down to 300 m spacing); keep in sync with
+# ledger/gateway/identities.json.
+RSU_IDS=(rsu{0..15})
 
 export ORDERER_CA="$TN/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem"
 export ORG1_TLS="$TN/organizations/peerOrganizations/org1.example.com/tlsca/tlsca.org1.example.com-cert.pem"

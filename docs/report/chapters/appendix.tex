@@ -1,0 +1,28 @@
+\chapter{Reproducing the Results}\label{app:repro}
+
+The repository's \texttt{README.md} and \texttt{docs/how-it-works.md} describe setup in detail. On
+Linux, \texttt{./setup.sh} creates a Python environment with ns-3 and SUMO. The main commands are:
+
+\begin{center}\small
+\begin{tabular}{@{}lp{9.5cm}@{}}
+\toprule
+Command & Result \\
+\midrule
+\texttt{make test} & all automated tests \\
+\texttt{make live} & one ns-3 run narrated in the terminal \\
+\texttt{make viz} & the same run as a live map in the browser \\
+\texttt{make demo} & Phase-I, v3-fast and v3-private side by side \\
+\texttt{make evaluate-all} & every sweep of Chapter~\ref{ch:results} (about a day on 8 cores) \\
+\texttt{make emergency} & the emergency-vehicle sweep \\
+\texttt{make detector-benchmark} & the VeReMi Extension benchmark \\
+\texttt{make ledger-bench} & the Fabric Raft and SmartBFT benchmark \\
+\texttt{make fabric-up}, \texttt{make gateway} & a real Fabric network and its REST gateway \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every table, figure and number in Chapters~\ref{ch:results} and in the abstract is generated from
+the experiment outputs by \texttt{python experiments/thesis\_data.py}, which writes the folder
+\texttt{docs/report/generated}. Each run folder contains \texttt{config.json} with every option of the
+run, so any result can be repeated exactly. Every run also has its \texttt{metrics.csv} with one row per
+event, from which all metrics are computed.

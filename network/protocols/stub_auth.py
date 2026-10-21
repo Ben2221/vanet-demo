@@ -45,7 +45,12 @@ _AUTH_REQ = struct.Struct("!B8sH8sdBB")        # type, pid, rsu, nonce, t, servi
 _AUTH_RESP = struct.Struct("!B8sHBBd")         # type, pid, rsu, ok, handover, t_req
 _HO_REQ = struct.Struct("!B8sH8sd")            # type, pid, rsu, nonce, t
 
-PSEUDONYMS_PER_VEHICLE = 5
+# A PKI vehicle holds a pool of pseudonym certificates (IEEE 1609.2 / SCMS: about 20 a week).
+# This stand-in changes pseudonym after every 3 sessions, handovers included, so a pool of
+# 5 came back to old pseudonyms within seconds, which the detector's Sybil rule (one radio
+# alternating pseudonyms) flagged as an attack. 20 is not reused within a run. --pseudonyms N
+# overrides it.
+PSEUDONYMS_PER_VEHICLE = 20
 SESSIONS_PER_PSEUDONYM = 3
 REPORT_K, REPORT_W = 3, 10      # report after K flagged BSMs out of the last W
 NONCE_WINDOW = 1.0               # a beacon nonce is valid for 1 s
@@ -90,7 +95,7 @@ def setup(env) -> None:
     owner: dict[str, str] = {}
     leaves = []
     for v in env.vehicles:
-        pids = [os.urandom(8) for _ in range(PSEUDONYMS_PER_VEHICLE)]
+        pids = [os.urandom(8) for _ in range(int(env.config.get("pseudonyms") or PSEUDONYMS_PER_VEHICLE))]
         v.app.pids = pids
         for p in pids:
             owner[p.hex()] = v.name     # escrowed identity, never on the ledger
@@ -222,7 +227,10 @@ class Rsu:
         bsm = {"pid": pid_hex, "seq": seq, "t": t, "x": x, "y": y, "speed": speed, "heading": heading,
                "rsu_x": rx, "rsu_y": ry, "rx_time": sim_time, "sender": node.last_sender}
         hist = self.history.setdefault(pid_hex, deque(maxlen=20))
-        flagged, _ = self.detector(bsm, list(hist))
+        flagged, features = self.detector(bsm, list(hist))
+        features = features or {}
+        if features.get("error") or features.get("foreign"):
+            return          # not a judgement of this sender (as in the real protocol's RSU)
         hist.append(bsm)
         win = self.flags.setdefault(pid_hex, deque(maxlen=REPORT_W))
         win.append(bool(flagged))

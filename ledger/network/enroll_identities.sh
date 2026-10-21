@@ -46,6 +46,6 @@ enroll_identity() {
 }
 
 enroll_identity 1 ta1 "${TA1_SECRET:-ta1pw}" "$ORG1_DIR" ca-org1 7054 "$ORG1_CA_TLS"
-for n in 1 2 3 4; do
-  enroll_identity 2 "rsu$n" "${RSU_SECRET_PREFIX:-rsu}${n}pw" "$ORG2_DIR" ca-org2 8054 "$ORG2_CA_TLS"
+for rsu in "${RSU_IDS[@]}"; do
+  enroll_identity 2 "$rsu" "${RSU_SECRET_PREFIX:-rsu}${rsu#rsu}pw" "$ORG2_DIR" ca-org2 8054 "$ORG2_CA_TLS"
 done

@@ -1,0 +1,117 @@
+{
+  "name": "ablation_v3",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "fixed": {
+    "duration": 120,
+    "backend": "ns3",
+    "ledger": "mock",
+    "mobility_step": 0.1,
+    "attacker_ratio": 0.1,
+    "attack": "random_pos",
+    "attack_start": 30,
+    "compute_times": "experiments/compute_times_v3.json",
+    "rsu_cpu": true,
+    "v2v_verify": true,
+    "obu_scale": 5,
+    "privacy_log": true,
+    "vehicles": 100,
+    "protocol": "real"
+  },
+  "variants": [
+    {
+      "label": "v2",
+      "profile": "v2"
+    },
+    {
+      "label": "v2 +mac",
+      "profile": "v2",
+      "bsm_auth": "mac",
+      "adaptive_anchor": true
+    },
+    {
+      "label": "v2 +tesla",
+      "profile": "v2",
+      "bsm_auth": "tesla",
+      "ticket_period": 2.0
+    },
+    {
+      "label": "v2 +tesla adaptive",
+      "profile": "v2",
+      "bsm_auth": "tesla",
+      "adaptive_auth": true,
+      "ticket_period": 2.0
+    },
+    {
+      "label": "v2 +tesla fast keys",
+      "profile": "v2",
+      "bsm_auth": "tesla",
+      "tesla_interval": 0.025,
+      "tesla_key_msgs": true,
+      "ticket_period": 2.0
+    },
+    {
+      "label": "v2 +implicit-cert",
+      "profile": "v2",
+      "implicit_cert": true
+    },
+    {
+      "label": "v2 +clusters",
+      "profile": "v2",
+      "cluster_size": 2
+    },
+    {
+      "label": "v2 +batch",
+      "profile": "v2",
+      "batch_verify": true
+    },
+    {
+      "label": "v2 +dead-reckoning",
+      "profile": "v2",
+      "dr_bsm": true
+    },
+    {
+      "label": "v2 +renewal",
+      "profile": "v2",
+      "ticket_renewal": true
+    },
+    {
+      "label": "v2 +revocation-filter",
+      "profile": "v2",
+      "revocation_filter": true
+    },
+    {
+      "label": "v2 +rssi check",
+      "profile": "v2",
+      "rssi_check": true
+    },
+    {
+      "label": "v2 +hybrid detector",
+      "profile": "v2",
+      "rssi_check": true,
+      "detector_mode": "hybrid",
+      "detector_model": "detection/models/hgb_sim.joblib"
+    },
+    {
+      "label": "v2 +mix-zones",
+      "profile": "v2",
+      "mix_zones": true
+    },
+    {
+      "label": "v2 +bbs",
+      "profile": "v2",
+      "credential": "bbs"
+    },
+    {
+      "label": "v3-fast",
+      "profile": "v3-fast"
+    },
+    {
+      "label": "v3-private",
+      "profile": "v3-private"
+    }
+  ]
+}
