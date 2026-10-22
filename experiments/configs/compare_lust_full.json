@@ -1,0 +1,63 @@
+{
+  "name": "compare_lust",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "fixed": {
+    "duration": 120,
+    "backend": "ns3",
+    "ledger": "mock",
+    "mobility_step": 0.1,
+    "attacker_ratio": 0.1,
+    "attack": "random_pos",
+    "attack_start": 30,
+    "compute_times": "experiments/compute_times_v3.json",
+    "rsu_cpu": true,
+    "v2v_verify": true,
+    "obu_scale": 5,
+    "privacy_log": true
+  },
+  "grid": {
+    "real": [
+      "lust:low",
+      "lust:mid",
+      "lust:peak"
+    ]
+  },
+  "variants": [
+    {
+      "label": "ECDSA-PKI",
+      "protocol": "experiments.baselines.ecdsa_pki"
+    },
+    {
+      "label": "Central-TA",
+      "protocol": "experiments.baselines.central_auth"
+    },
+    {
+      "label": "Phase-I",
+      "protocol": "real"
+    },
+    {
+      "label": "v2",
+      "protocol": "real",
+      "profile": "v2"
+    },
+    {
+      "label": "v2-mac",
+      "protocol": "real",
+      "profile": "v2-mac"
+    },
+    {
+      "label": "v3-fast",
+      "protocol": "real",
+      "profile": "v3-fast"
+    },
+    {
+      "label": "v3-private",
+      "protocol": "real",
+      "profile": "v3-private"
+    }
+  ]
+}

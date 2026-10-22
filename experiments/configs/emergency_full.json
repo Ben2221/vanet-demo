@@ -1,0 +1,44 @@
+{
+  "name": "emergency",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "fixed": {
+    "duration": 120,
+    "backend": "ns3",
+    "ledger": "mock",
+    "mobility_step": 0.1,
+    "attacker_ratio": 0.1,
+    "attack": "random_pos",
+    "attack_start": 30,
+    "compute_times": "experiments/compute_times_v3.json",
+    "rsu_cpu": true,
+    "v2v_verify": true,
+    "obu_scale": 5,
+    "protocol": "real",
+    "profile": "v3-fast",
+    "emergency_ratio": 0.02
+  },
+  "grid": {
+    "real": [
+      "lust:mid",
+      "lust:peak"
+    ]
+  },
+  "variants": [
+    {
+      "label": "EV, no priority"
+    },
+    {
+      "label": "EV + priority",
+      "emergency_priority": true
+    },
+    {
+      "label": "EV + priority, fake-EV attack",
+      "emergency_priority": true,
+      "attack": "fake_emergency"
+    }
+  ]
+}

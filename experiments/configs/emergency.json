@@ -6,7 +6,7 @@
     3
   ],
   "fixed": {
-    "duration": 120,
+    "duration": 60,
     "backend": "ns3",
     "ledger": "mock",
     "mobility_step": 0.1,
@@ -23,8 +23,7 @@
   },
   "grid": {
     "real": [
-      "lust:mid",
-      "lust:peak"
+      "lust:mid"
     ]
   },
   "variants": [
