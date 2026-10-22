@@ -835,6 +835,8 @@ class VehicleApp:
         self.ev_on = _emergency_on(cfg)
         self.fake_ev = getattr(node, "is_attacker", False) and cfg.get("attack") == "fake_emergency"
         self.fake_ev_tried = False
+        # a flooding attacker controls its OBU: it sends every beacon, dead reckoning or not
+        self.flood = getattr(node, "is_attacker", False) and cfg.get("attack") == "flood"
         self.attack_start = float(cfg.get("attack_start") or 0.0)
         self.ev_heard: dict[int, float] = {}              # emergency sender node -> last accepted alert
         self.radio_priority = EV_RADIO_PRIORITY if self.emergency and cfg.get("emergency_priority") else None
@@ -937,7 +939,8 @@ class VehicleApp:
         err = self._prediction_error(state, sim_time)
         if err is not None and not node.is_attacker:
             st["awareness"].append(err)
-        if self.dr and not (urgent or ev) and not self._dr_due(state, sim_time, err):
+        flooding = self.flood and sim_time >= self.attack_start
+        if self.dr and not (urgent or ev or flooding) and not self._dr_due(state, sim_time, err):
             st["dr_skipped"] += 1
             return b""
         st["urgent"] += urgent

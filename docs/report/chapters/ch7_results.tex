@@ -146,9 +146,10 @@ gradient boosting with a history window \R{veremi}{hgb_window_f1} at a false-pos
 \gentab{tab_sensitivity_attackers}
 
 In the simulation, Tables~\ref{tab:sensitivity-attack} and~\ref{tab:sensitivity-attackers} show
-detection per attack type and for an increasing share of attackers. The two-report rule matters
-here: a single RSU's false alarm has no consequence, so honest vehicles keep their pseudonyms even
-when one RSU misjudges them.
+detection per attack type and for an increasing share of attackers. Every attack type is caught,
+and no honest vehicle is revoked, up to 30\,\% attackers. The two-report rule matters here: a
+single RSU's false alarm has no consequence, so honest vehicles keep their pseudonyms even when one
+RSU misjudges them.
 
 \section{Compromised RSUs}\label{sec:res-trust}
 
@@ -157,8 +158,9 @@ when one RSU misjudges them.
 Table~\ref{tab:trust} lets a quarter of the RSUs report random honest pseudonyms every 5\,s. With
 plain $K = 2$ counting, two compromised RSUs together can revoke an honest pseudonym. With
 trust-weighted reports, an RSU's weight falls once investigations show its reports were wrong,
-after which its reports no longer suffice to revoke anyone. The table compares honest vehicles
-revoked with and without weighting, and checks that attackers are still caught.
+after which its reports no longer suffice to revoke anyone. Its first false reports still count,
+so weighting does not bring the number of honest vehicles revoked to zero: it falls from 5.8 to
+2.4 per run for v2, while every attacker is still caught.
 
 \section{Privacy}\label{sec:res-privacy}
 

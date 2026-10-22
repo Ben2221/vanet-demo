@@ -1,3 +1,14 @@
-\begin{table}[htbp]\centering\caption{Compromised RSUs: 25\,\% of the RSUs report random honest vehicles (100 vehicles, 10 seeds)}\label{tab:trust}
-\fbox{\parbox{0.8\textwidth}{\centering\textbf{Results pending:} this sweep has not finished yet (make evaluate-all, then python experiments/thesis\_data.py).}}
+\begin{table}[htbp]\centering\scriptsize
+\caption{Compromised RSUs: 25\,\% of the RSUs report random honest vehicles (100 vehicles, 10 seeds)}\label{tab:trust}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Variant & \rotatebox{70}{Caught} & \rotatebox{70}{Honest revoked} & \rotatebox{70}{Report to revocation (s)} \\
+\midrule
+v3-fast & 1.00 & 3.0 $\pm$ 0.8 & 12.31 $\pm$ 4.17 \\
+Phase-I (K=2) & 1.00 & 3.4 $\pm$ 2.4 & 10.28 $\pm$ 5.74 \\
+v2 (K=2, fast revocation) & 1.00 & 5.8 $\pm$ 2.9 & 12.84 $\pm$ 4.81 \\
+v2 +trust-weighted & 1.00 & 2.4 $\pm$ 1.0 & 12.10 $\pm$ 3.60 \\
+\bottomrule
+\end{tabular}}
 \end{table}
