@@ -166,7 +166,10 @@ batch timeout, the median commit takes \R{ledger}{raft_500ms_5_p50}\,ms, dominat
 block to be cut. With a 50\,ms timeout, Raft commits in \R{ledger}{raft_50ms_5_p50}\,ms and SmartBFT
 in \R{ledger}{bft_50ms_5_p50}\,ms at 5 transactions per second. At 20 per second, Byzantine fault
 tolerance costs more: SmartBFT's median rises to \R{ledger}{bft_50ms_20_p50}\,ms against
-\R{ledger}{raft_50ms_20_p50}\,ms for Raft. No transaction failed. These latencies confirm the design
+\R{ledger}{raft_50ms_20_p50}\,ms for Raft. No transaction failed. Lowering the batch timeout $\tau$ from
+500 to 50\,ms cuts Raft's median from \R{ledger}{raft_500ms_5_p50} to \R{ledger}{raft_50ms_5_p50}\,ms,
+so the wait for the block to be cut, the term $T_{\mathrm{batch}} \le \tau$ of
+Equation~\eqref{eq:commit}, dominates commit latency. These latencies confirm the design
 principle: a commit takes tens to hundreds of milliseconds, too slow for the path of a safety message,
 but fast enough for authorization records and revocations, which the RSUs bridge with PREAUTH notes
 and quarantine.

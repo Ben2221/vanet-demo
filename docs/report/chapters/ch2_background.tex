@@ -108,7 +108,7 @@ A Bloom filter~\cite{bloom1970} represents a set in $m$ bits with $k$ hash funct
 negatives and a tunable false-positive rate. The extension uses one to put the recently revoked
 pseudonyms into RSU beacons.
 
-\section{Permissioned Blockchain: Hyperledger Fabric}
+\section{Permissioned Blockchain: Hyperledger Fabric}\label{sec:bg-fabric}
 
 Hyperledger Fabric~\cite{androulaki2018fabric} is a permissioned blockchain in which every
 participant has a certificate from its organization's Membership Service Provider (MSP). A
@@ -116,10 +116,41 @@ transaction is executed by the endorsing peers (\emph{execute}), ordered into bl
 service (\emph{order}) and validated and committed by every peer (\emph{validate}). Smart contracts,
 called chaincode, can read the caller's identity and therefore enforce role-based rules: only the TA
 may register roots or policies, and only RSUs may record authentications or report misbehaviour.
-The ordering service runs either Raft~\cite{ongaro2014raft}, which tolerates crashes of a minority of
-orderers, or SmartBFT~\cite{barger2021smartbft}, which tolerates $f$ Byzantine orderers out of
-$n \ge 3f+1$~\cite{lamport1982byzantine,castro1999pbft} and commits after $2f+1$ matching votes. Blocks are cut when a batch is full or after a
-batch timeout, which is the main term in commit latency.
+
+\textbf{Blocks.} Block $i$ holds $m$ transactions and a header that commits to them and to the
+previous header:
+\begin{equation}
+  D_i = H(\mathit{tx}_{i,1} \,\|\, \dots \,\|\, \mathit{tx}_{i,m}), \qquad
+  h_i = H(i \,\|\, h_{i-1} \,\|\, D_i).
+\end{equation}
+Changing any recorded transaction changes $D_i$, hence $h_i$ and every later header, so a peer that
+holds $h_j$ for some $j \ge i$ detects the change.
+
+\textbf{Validation.} A transaction $T$ carries the endorsements $E(T)$ of the peers that executed it
+and the read set $\mathit{RS}(T)$ of keys and versions it read. Every peer commits it only if
+\begin{equation}
+  \mathrm{EP}\bigl(E(T)\bigr) = \mathrm{true}
+  \;\wedge\; \forall (k, v) \in \mathit{RS}(T):\ \mathrm{ver}(k) = v,
+\end{equation}
+that is, if the endorsements satisfy the chaincode's endorsement policy $\mathrm{EP}$ (here the
+default, a majority of the peer organizations) and no key it read has changed since (multi-version
+concurrency control). Otherwise the transaction stays in the block but is marked invalid.
+
+\textbf{Ordering.} The ordering service runs either Raft~\cite{ongaro2014raft} or
+SmartBFT~\cite{barger2021smartbft}. Raft commits a block once a majority of the $n$ orderers have
+stored it and so tolerates $f$ crashed orderers for $n = 2f+1$. SmartBFT tolerates $f$ Byzantine
+orderers for $n \ge 3f+1$~\cite{lamport1982byzantine,castro1999pbft} and commits after $2f+1$
+matching votes; the deployment uses $n = 4$, $f = 1$.
+
+\textbf{Commit latency.} A write becomes visible after
+\begin{equation}
+  T_{\mathrm{commit}} = T_{\mathrm{endorse}} + T_{\mathrm{batch}} + T_{\mathrm{order}}
+  + T_{\mathrm{validate}}, \qquad 0 \le T_{\mathrm{batch}} \le \tau,
+  \label{eq:commit}
+\end{equation}
+where $T_{\mathrm{batch}}$ is the wait until the orderer cuts the block. While blocks fill more slowly
+than their maximum size, a block is cut $\tau$ after its first transaction (the batch timeout), so
+$\tau$ dominates at low load.
 
 \section{Misbehaviour Detection}
 

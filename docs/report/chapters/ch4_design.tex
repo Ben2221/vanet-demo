@@ -57,7 +57,7 @@ the root with its validity period on the ledger through the chaincode function
 pseudonyms) and escrows the key with the RSU organizations as $t$-of-$n$ Shamir shares, with
 $t = 2f+1$ for $n = 3f+1$ organizations (5 of 9 in the evaluated scenarios).
 
-\section{Authentication}
+\section{Authentication}\label{sec:auth}
 
 \begin{figure}[htbp]\centering
 \begin{tikzpicture}[font=\small, >={Latex[length=2mm]}]
@@ -166,6 +166,28 @@ Function & Caller & Effect \\
 Table~\ref{tab:chaincode} lists the chaincode functions. The chaincode reads the caller's role from
 its Fabric certificate, so an RSU cannot change a policy and a vehicle cannot write at all. RSUs reach
 Fabric through a REST gateway that signs each transaction with the caller's identity.
+
+\textbf{Ledger state and rules.} The world state holds the Merkle roots, the policies
+$\mathrm{Pol}(\mathit{svc})$, the authorization records, for every pseudonym $p$ the set
+$\mathcal{R}(p)$ of RSUs that reported it (one report per RSU, stored under the key $(p, u)$), the
+revocation set $\mathcal{V}$, and for every trace request $q$ the set of approving organizations
+$A(q)$. With $u$ the calling RSU, the chaincode accepts an authorization record
+(\texttt{RecordAuth}) and revokes and reveals according to
+\begin{align}
+  \mathrm{accept}(p, \mathit{svc}, c)
+    &\iff \mathrm{role}(u) = \mathrm{RSU} \;\wedge\; p \notin \mathcal{V}
+       \;\wedge\; c \in \mathrm{Pol}(\mathit{svc}), \label{eq:recordauth}\\
+  \mathrm{revoke}(p) &\iff \textstyle\sum_{u \in \mathcal{R}(p)} w_u \ge K, \label{eq:revoke}\\
+  q \text{ approved} &\iff |A(q)| \ge t. \label{eq:trace}
+\end{align}
+Each weight $w_u \in [0, 1]$ is 1 unless trust weighting has lowered it (Section~\ref{sec:trust}), so
+by default \eqref{eq:revoke} is $|\mathcal{R}(p)| \ge K$ distinct RSUs. A revoked pseudonym enters
+$\mathcal{V}$, as do all pseudonyms of a vehicle that the TA revokes after an approved trace. No chaincode function removes
+a pseudonym from $\mathcal{V}$, so a revocation is permanent, and every change to $\mathcal{R}$,
+$\mathcal{V}$ and $A$ is a signed transaction in the hash chain of Section~\ref{sec:bg-fabric}. An
+RSU's decision to admit a vehicle (Section~\ref{sec:auth}) checks the same predicate as
+\eqref{eq:recordauth} on its local copy of the state, which is why the ledger can stay off the login
+path.
 
 \section{Security Analysis}
 
