@@ -393,6 +393,16 @@ def main(argv: list[str] | None = None) -> dict:
         attacker_ratio=a.attacker_ratio, attack=a.attack, attack_start=a.attack_start,
         compute_times=compute_times, ledger_sync=a.ledger_sync, backbone_ms=a.backbone_ms, config=config,
     )
+    if backend_name == "ns3" and a.netanim:
+        # NetAnim: normal vehicles blue, attackers red, emergency vehicles orange, RSUs grey
+        from protocol.sim_app import _is_emergency
+        for h in scenario.vehicles:
+            if h.is_attacker:
+                backend.color(h.id, (220, 30, 30), 11)
+                backend.describe(h.id, f"{h.name} (attacker)")
+            elif _is_emergency(h, config):
+                backend.color(h.id, (255, 150, 0), 11)
+                backend.describe(h.id, f"{h.name} (emergency)")
     narrator = None
     if a.live:
         from experiments.live import Narrator

@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay viz emergency report evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay scenarios scenario-low scenario-high scenario-mixed viz emergency report evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -171,6 +171,30 @@ RUN ?= experiments/results/demo/v3-fast
 SPEED ?= 4
 replay: $(PY)
 	$(PY) experiments/live.py $(RUN) --speed $(SPEED)
+
+# three demo scenarios on the grid (ns-3, this work), each recorded with a NetAnim file in which
+# normal vehicles are blue, attackers red, emergency vehicles orange and RSUs grey:
+#   make scenarios            record all three (experiments/results/scenarios/, ~4 min)
+#   make scenario-low         30 vehicles, live map + narration (http://127.0.0.1:8765)
+#   make scenario-high        150 vehicles, live
+#   make scenario-mixed       60 vehicles with 10 % attackers and 10 % emergency vehicles, live
+SCN = $(PY) network/run_scenario.py --seed 1 --backend ns3 --protocol real --mobility-step 0.1 \
+	--rsu-spacing 450 --attacker-ratio 0.1 --attack random_pos --rsu-cpu --v2v-verify --privacy-log \
+	--compute-times experiments/compute_times_v3.json --profile v3-fast
+SCN_LOW   = --vehicles 30 --duration 120 --attack-start 40
+SCN_HIGH  = --vehicles 150 --duration 90 --attack-start 30
+SCN_MIXED = --vehicles 60 --duration 120 --attack-start 40 --emergency-ratio 0.1 --emergency-priority
+SCN_LIVE  = --live --live-pace 1 --viz --viz-port $(VIZ_PORT)
+scenarios: $(PY)
+	$(SCN) $(SCN_LOW) --netanim --live --out experiments/results/scenarios/1_low_density 2>/dev/null > experiments/results/scenarios/1_low_density.log
+	$(SCN) $(SCN_HIGH) --netanim --live --out experiments/results/scenarios/2_high_density 2>/dev/null > experiments/results/scenarios/2_high_density.log
+	$(SCN) $(SCN_MIXED) --netanim --live --out experiments/results/scenarios/3_all_node_types 2>/dev/null > experiments/results/scenarios/3_all_node_types.log
+scenario-low: $(PY)
+	$(SCN) $(SCN_LOW) $(SCN_LIVE) --out experiments/results/viz/scenario_low 2>/dev/null
+scenario-high: $(PY)
+	$(SCN) $(SCN_HIGH) $(SCN_LIVE) --out experiments/results/viz/scenario_high 2>/dev/null
+scenario-mixed: $(PY)
+	$(SCN) $(SCN_MIXED) $(SCN_LIVE) --out experiments/results/viz/scenario_mixed 2>/dev/null
 
 mock: $(PY)
 	@if ss -ltnH "sport = :$(PORT)" 2>/dev/null | grep -q .; then \

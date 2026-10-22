@@ -312,13 +312,18 @@ void EnableNetAnim(std::string file, uint32_t nVeh, bool packets, double pollS) 
             g_anim->UpdateNodeColor(i, 30, 110, 220);
             g_anim->UpdateNodeSize(i, 8, 8);
         } else {
-            g_anim->UpdateNodeColor(i, 220, 60, 40);
+            g_anim->UpdateNodeColor(i, 70, 70, 70);
             g_anim->UpdateNodeSize(i, 20, 20);
             g_anim->UpdateNodeDescription(i, "rsu" + std::to_string(i - nVeh));
         }
     }
 }
 void DescribeNode(uint32_t id, std::string text) { if (g_anim) g_anim->UpdateNodeDescription(id, text); }
+void ColorNode(uint32_t id, uint8_t r, uint8_t g, uint8_t b, double size) {
+    if (!g_anim) return;
+    g_anim->UpdateNodeColor(id, r, g, b);
+    g_anim->UpdateNodeSize(id, size, size);
+}
 }
 """
 
@@ -419,6 +424,11 @@ class Ns3Backend(Backend):
     def describe(self, node: int, text: str) -> None:
         if hasattr(self.g, "DescribeNode"):
             self.g.DescribeNode(node, text)
+
+    def color(self, node: int, rgb: tuple[int, int, int], size: float = 8.0) -> None:
+        """NetAnim only: colour and size of a node (no-op without --netanim)."""
+        if hasattr(self.g, "ColorNode"):
+            self.g.ColorNode(node, *rgb, float(size))
 
     def run(self, until: float) -> None:
         self.g.Run(until)
