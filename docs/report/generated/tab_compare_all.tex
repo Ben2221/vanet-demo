@@ -1,9 +1,9 @@
-\begin{table}[htbp]\centering\scriptsize
+\begin{table}[htbp]\centering\small
 \caption{Grid scenario at 50, 100 and 150 vehicles}\label{tab:compare-all}
-\resizebox{\textwidth}{!}{%
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
 \begin{tabular}{lrrrrr}
 \toprule
-Variant & \rotatebox{70}{Ticket (ms)} & \rotatebox{70}{Safety traffic (B/s)} & \rotatebox{70}{PDR} & \rotatebox{70}{CBR} & \rotatebox{70}{V2V accept (ms)} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{V2V accept (ms)} \\
 \midrule
 \multicolumn{6}{l}{\textit{vehicles = 50}} \\
 Phase-I & 1.72 $\pm$ 0.13 & 3085 $\pm$ 31 & 0.987 $\pm$ 0.002 & 0.099 $\pm$ 0.002 & 1.52 $\pm$ 0.01 \\

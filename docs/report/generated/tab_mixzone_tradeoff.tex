@@ -1,9 +1,9 @@
-\begin{table}[htbp]\centering\scriptsize
+\begin{table}[htbp]\centering\small
 \caption{Mix zones: longest silent period (s) against tracking}\label{tab:mixzone-tradeoff}
-\resizebox{\textwidth}{!}{%
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
 \begin{tabular}{lrrrr}
 \toprule
-Variant & \rotatebox{70}{Tracked} & \rotatebox{70}{Trip traced} & \rotatebox{70}{Silent share} & \rotatebox{70}{Position error p95 (m)} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Tracked} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Trip traced} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Silent share} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Position error p95 (m)} \\
 \midrule
 \multicolumn{5}{l}{\textit{mix\_silent\_max = 1.5}} \\
 v3-private & 0.96 $\pm$ 0.08 & 0.96 $\pm$ 0.11 & 0.041 $\pm$ 0.001 & 0.10 $\pm$ 0.00 \\

@@ -1,9 +1,9 @@
-\begin{table}[htbp]\centering\scriptsize
+\begin{table}[htbp]\centering\small
 \caption{Detection per attack type}\label{tab:sensitivity-attack}
-\resizebox{\textwidth}{!}{%
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
 \begin{tabular}{lrrr}
 \toprule
-Variant & \rotatebox{70}{Caught} & \rotatebox{70}{Honest revoked} & \rotatebox{70}{Report to revocation (s)} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Caught} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Honest revoked} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Report to revocation (s)} \\
 \midrule
 \multicolumn{4}{l}{\textit{attack = const\_pos}} \\
 Phase-I & 1.00 & 0.0 & 18.07 $\pm$ 16.47 \\

@@ -112,17 +112,32 @@ def head(col: str) -> str:
     return tex(h) + (f" ({tex(unit)})" if unit else "")
 
 
+def frame(caption: str, label: str, first: str, heads: list[str], sideways: bool = False):
+    """Opening and closing lines of a generated table. Headers are horizontal and wrap; a table is
+    shrunk to the available width, never enlarged; ``sideways`` puts a wide table on a landscape page."""
+    n = len(heads)
+    env = "sidewaystable" if sideways else "table"
+    width = "\\textheight" if sideways else "\\textwidth"
+    col = "1.4cm" if n > 5 else "2.1cm"
+    cells = [f"\\multicolumn{{1}}{{>{{\\raggedleft\\arraybackslash}}p{{{col}}}}}{{{h}}}" for h in heads]
+    head = [f"\\begin{{{env}}}" + ("" if sideways else "[htbp]") + "\\centering"
+            + ("\\footnotesize\\setlength{\\tabcolsep}{3.5pt}" if n > 5 else "\\small"),
+            f"\\caption{{{caption}}}\\label{{{label}}}",
+            f"\\resizebox{{\\ifdim\\width>{width}{width}\\else\\width\\fi}}{{!}}{{%",
+            "\\begin{tabular}{l" + "r" * n + "}", "\\toprule",
+            f"{first} & " + " & ".join(cells) + " \\\\", "\\midrule"]
+    return head, ["\\bottomrule", "\\end{tabular}}"], f"\\end{{{env}}}"
+
+
 def table(path: Path, rows: list[dict], metrics: list[str], caption: str, label: str,
           group: str | None = None, note: str = "") -> None:
     """One booktabs table: variants as rows, ``metrics`` as columns; with ``group`` a block of
-    rows per value of that column. Rotated headers keep wide tables on the page."""
+    rows per value of that column. More than eight metrics go on a landscape page."""
     metrics = [m for m in metrics if any(_f(r.get(m)) is not None for r in rows)]
     if not rows or not metrics:
         pending(path, caption, label)
         return
-    out = ["\\begin{table}[htbp]\\centering\\scriptsize", f"\\caption{{{caption}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{l" + "r" * len(metrics) + "}", "\\toprule",
-           "Variant & " + " & ".join(f"\\rotatebox{{70}}{{{head(m)}}}" for m in metrics) + " \\\\", "\\midrule"]
+    out, tail, end = frame(caption, label, "Variant", [head(m) for m in metrics], sideways=len(metrics) > 8)
     blocks: dict[str, list[dict]] = {}
     for r in rows:
         blocks.setdefault(r.get(group, "") if group else "", []).append(r)
@@ -134,10 +149,10 @@ def table(path: Path, rows: list[dict], metrics: list[str], caption: str, label:
             out.append(f"\\multicolumn{{{len(metrics) + 1}}}{{l}}{{\\textit{{{tex(group)} = {tex(k)}}}}} \\\\")
         for r in blocks[k]:
             out.append(tex(name(r)) + " & " + " & ".join(cell(r, m) for m in metrics) + " \\\\")
-    out += ["\\bottomrule", "\\end{tabular}}"]
+    out += tail
     if note:
         out.append(f"\\par\\smallskip\\parbox{{\\textwidth}}{{\\scriptsize {note}}}")
-    out.append("\\end{table}")
+    out.append(end)
     path.write_text("\n".join(out) + "\n")
 
 
@@ -195,7 +210,7 @@ def main() -> None:
             N.put("cmp/derived", col + "_cut_pct", v)
     if _f(p1.get("safety_bytes_per_vehicle_s")) and _f(v3.get("safety_bytes_per_vehicle_s")):
         N.put("cmp/derived", "safety_factor", f"{_f(p1['safety_bytes_per_vehicle_s']) / _f(v3['safety_bytes_per_vehicle_s']):.1f}")
-    table(out / "tab_compare.tex", sel, HEADLINE[:8],
+    table(out / "tab_compare.tex", sel, [m for m in HEADLINE[:8] if m != "ticket_ms_steady_mean"],
           f"Grid scenario, {top or '?'} vehicles: latency and overhead (ns-3, mean $\\pm$ 95\\,\\% CI over 5 seeds)",
           "tab:compare")
     table(out / "tab_compare_sec.tex", sel, HEADLINE[8:] + ["report_to_revocation_s_mean", "obu_cpu_util_mean"],
@@ -212,7 +227,7 @@ def main() -> None:
     for r in rows:
         N.rows(r.get("real", "?"), [r])
     table(out / "tab_lust.tex", rows, ["ticket_ms_mean", "ticket_ms_steady_mean", "safety_bytes_per_vehicle_s",
-                                       "pdr", "cbr_rsu_mean", "v2v_accept_ms_mean", "detection_rate", "honest_revoked"],
+                                       "pdr", "cbr_rsu_mean", "v2v_accept_ms_mean", "detection_rate"],
           "LuST (Luxembourg) traffic: low (06:00), mid (14:00) and peak (08:00) windows", "tab:lust", group="real")
 
     # ---- ablation, compromised RSUs, sensitivity, mix zones, emergency
@@ -267,9 +282,7 @@ def significance(sweep: Path, top, path: Path) -> None:
     with f.open(newline="") as fh:
         runs = [r for r in csv.DictReader(fh) if _f(r.get("vehicles")) == top]
     cols = HEADLINE[:8] + ["v2v_revoked_accepted_ratio"]
-    out = ["\\begin{table}[htbp]\\centering\\scriptsize", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{l" + "r" * len(cols) + "}", "\\toprule",
-           "Challenger & " + " & ".join(f"\\rotatebox{{70}}{{{head(c)}}}" for c in cols) + " \\\\", "\\midrule"]
+    out, tail, end = frame(cap, label, "Challenger", [head(c) for c in cols])
     ref = [r for r in runs if r.get("label") == "Phase-I"]
     for ch in ("v3-fast", "v3-private"):
         cr = [r for r in runs if r.get("label") == ch]
@@ -303,7 +316,7 @@ def veremi(f: Path, path: Path, N: Numbers) -> None:
              "hgb_window": "Gradient boosting + history window",
              "hgb_window_calibrated": "\\quad + calibrated threshold"}
     out = ["\\begin{table}[htbp]\\centering\\small", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
+           "\\resizebox{\\ifdim\\width>\\textwidth\\textwidth\\else\\width\\fi}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
            "Detector & F1 & FPR & ROC AUC & Attackers reported \\\\", "\\midrule"]
     for k, lbl in names.items():
         if k not in summ:
@@ -329,7 +342,7 @@ def ledger(f: Path, path: Path, N: Numbers) -> None:
     names = {"raft_500ms": "Raft, 500 ms batch timeout", "raft_50ms": "Raft, 50 ms batch timeout",
              "bft_50ms": "SmartBFT, 50 ms batch timeout"}
     out = ["\\begin{table}[htbp]\\centering\\small", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
+           "\\resizebox{\\ifdim\\width>\\textwidth\\textwidth\\else\\width\\fi}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
            "Ordering service & Offered (tx/s) & Achieved (tx/s) & p50 (ms) & p95 (ms) \\\\", "\\midrule"]
     for k, lbl in names.items():
         for i, r in enumerate(d.get(k, [])):

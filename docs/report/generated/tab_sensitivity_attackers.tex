@@ -1,9 +1,9 @@
-\begin{table}[htbp]\centering\scriptsize
+\begin{table}[htbp]\centering\small
 \caption{Share of attackers}\label{tab:sensitivity-attackers}
-\resizebox{\textwidth}{!}{%
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
 \begin{tabular}{lrrrr}
 \toprule
-Variant & \rotatebox{70}{Caught} & \rotatebox{70}{Honest revoked} & \rotatebox{70}{PDR} & \rotatebox{70}{CBR} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Caught} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Honest revoked} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} \\
 \midrule
 \multicolumn{5}{l}{\textit{attacker\_ratio = 0.0}} \\
 Phase-I & -- & 0.0 & 0.965 $\pm$ 0.010 & 0.193 $\pm$ 0.008 \\
