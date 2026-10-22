@@ -26,7 +26,7 @@ uses, and ends with the problem statement.
 \section{Threat Model}\label{sec:threat}
 
 \begin{itemize}
-  \item \textbf{Outsider attackers} can listen to every message (a global passive eavesdropper),
+  \item \textbf{Outsider attackers} can listen to every message (a global passive eavesdropper~\cite{gruteser2005tracking}),
   inject, replay and modify messages, but hold no registered credential.
   \item \textbf{Insider attackers} are registered vehicles that send false information: false
   positions or speeds, sudden-stop claims, message floods, and, in the emergency extension, false
@@ -159,7 +159,7 @@ broadcast a false position. Misbehaviour detection checks plausibility: a vehicl
 than physically possible, accelerate beyond a limit, or be heard from beyond radio range. The VeReMi
 dataset~\cite{heijden2018veremi} and its extension~\cite{kamel2020veremiext} are the standard
 benchmark: realistic traces with 19 labelled attack types, among them constant or random position
-and speed offsets, sudden stops, replay, denial of service and Sybil variants.
+and speed offsets, sudden stops, replay, denial of service and Sybil~\cite{xiao2006sybil} variants.
 
 \section{Problem Statement}
 
@@ -171,5 +171,5 @@ Design a VANET authentication and authorization scheme that
   without placing the blockchain on the path of individual safety messages;
   \item removes misbehaving vehicles with conditional traceability that no single party controls;
 \end{enumerate}
-and evaluate on a realistic 802.11p network with real traffic whether its latency, channel load and
+and evaluate on a realistic 802.11p~\cite{jiang2008wave} network with real traffic whether its latency, channel load and
 detection performance are acceptable compared with certificate-based and centralized baselines.

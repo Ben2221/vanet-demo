@@ -34,12 +34,12 @@ RSUs must share and that must be auditable; it is not on the path of individual 
 
 Figure~\ref{fig:architecture} shows the entities. The guiding principle of the design is that
 \emph{proofs are verified at the edge and the ledger stores only shared state}. An RSU verifies a
-zero-knowledge proof locally in well under a millisecond, while a Fabric commit takes hundreds of
+zero-knowledge proof locally in well under a millisecond, while a Fabric~\cite{androulaki2018fabric} commit takes hundreds of
 milliseconds (Section~\ref{sec:res-ledger}). So the ledger is read from a local, regularly
 synchronised copy, written asynchronously, and never waited for while a safety message is handled.
 The ledger stores:
 \begin{itemize}
-  \item the Merkle root of each registration epoch (never a per-vehicle record);
+  \item the Merkle~\cite{merkle1987} root of each registration epoch (never a per-vehicle record);
   \item service policies: which vehicle classes may use which service;
   \item authorization records keyed by pseudonym, so that the next RSU can accept a handover;
   \item misbehaviour reports with evidence hashes, and the revocation list;
@@ -55,7 +55,7 @@ all pseudonyms of all vehicles, in shuffled order so that positions do not revea
 belong together, and gives each vehicle its keys and Merkle paths over a secure channel. It publishes
 the root with its validity period on the ledger through the chaincode function
 \texttt{RegisterRoot}. Finally it encrypts the vehicle's identity record (identity and list of
-pseudonyms) and escrows the key with the RSU organizations as $t$-of-$n$ Shamir shares, with
+pseudonyms) and escrows the key with the RSU organizations as $t$-of-$n$ Shamir~\cite{shamir1979} shares, with
 $t = 2f+1$ for $n = 3f+1$ organizations (5 of 9 in the evaluated scenarios).
 
 \section{Authentication}\label{sec:auth}
@@ -84,7 +84,7 @@ Figure~\ref{fig:auth-seq} shows the exchange.
 \begin{enumerate}
   \item Every RSU broadcasts a signed beacon every 100\,ms with its identity, a fresh nonce $n$ and a
   timestamp. A vehicle accepts only beacons from RSUs whose public keys it holds.
-  \item The vehicle computes the Schnorr response for the current pseudonym with
+  \item The vehicle computes the Schnorr~\cite{schnorr1991} response for the current pseudonym with
   \[\mathit{ctx} = \mathsf{enc}(\texttt{"VANET-AUTH-v1"}, \mathit{rsu}, n, ts, \mathit{svc}, \mathit{pid}, \mathit{class})\]
   and sends the pseudonym, its public key, the Merkle path, the proof, the requested service and its
   class.
@@ -120,12 +120,12 @@ Each BSM carries the pseudonym, the kinematic fields and the ticket, and is sign
 pseudonym's secret key, whose public key is in the ticket. A receiver checks the ticket's RSU
 signature, that the ticket's pseudonym matches, the BSM signature and the ticket expiry. The receiver
 needs no certificate chain and no ledger access. Carrying the full ticket would make every BSM
-about 330 bytes; Section~\ref{sec:mechanisms} replaces it by a digest and most signatures by TESLA MACs.
+about 330 bytes; Section~\ref{sec:mechanisms} replaces it by a digest and most signatures by TESLA~\cite{perrig2000tesla} MACs.
 
 \section{Misbehaviour Detection and Reporting}\label{sec:detect}
 
 Every RSU runs a detector on each authentic BSM against that pseudonym's recent history. Hard
-plausibility rules flag positions beyond radio range, speeds above 60\,m/s, accelerations above the
+plausibility rules~\cite{heijden2018veremi} flag positions beyond radio range, speeds above 60\,m/s, accelerations above the
 physical limit, positions inconsistent with the claimed speed, impossible heading flips, replays and
 message rates above 13 per second. Weak rules (sudden appearance close to the RSU, two pseudonyms at
 the same place) count only in pairs. An RSU reports a pseudonym once $K = 3$ of its last $W = 10$
@@ -185,7 +185,7 @@ Each weight $w_u \in [0, 1]$ is 1 unless trust weighting has lowered it (Section
 by default \eqref{eq:revoke} is $|\mathcal{R}(p)| \ge K$ distinct RSUs. A revoked pseudonym enters
 $\mathcal{V}$, as do all pseudonyms of a vehicle that the TA revokes after an approved trace. No chaincode function removes
 a pseudonym from $\mathcal{V}$, so a revocation is permanent, and every change to $\mathcal{R}$,
-$\mathcal{V}$ and $A$ is a signed transaction in the hash chain of Section~\ref{sec:bg-fabric}. An
+$\mathcal{V}$ and $A$ is a signed transaction in the hash chain~\cite{lamport1981password} of Section~\ref{sec:bg-fabric}. An
 RSU's decision to admit a vehicle (Section~\ref{sec:auth}) checks the same predicate as
 \eqref{eq:recordauth} on its local copy of the state, which is why the ledger can stay off the login
 path.
@@ -221,15 +221,16 @@ Ticket renewal; signal-strength check & login load; position spoofing \\
 \subsection{Smaller Messages: Digests, Compact Encoding, Implicit Certificates}
 
 A vehicle sends its full ticket only every tenth BSM, after hearing a new RSU, and at least every
-2\,s; the other BSMs carry a 16-byte ticket digest that receivers resolve from a cache. The compact
-wire format packs the kinematics into 16 bytes and uses 64-byte BIP-340 signatures. With ECQV
+2\,s; the other BSMs carry a 16-byte ticket digest that receivers resolve from a cache, in the way
+IEEE 1609.2 refers to a certificate by a short hash~\cite{ieee16092}. The compact
+wire format packs the kinematics into 16 bytes and uses 64-byte BIP-340~\cite{bip340} signatures. With ECQV~\cite{sec4ecqv}
 (Section~\ref{sec:tesla-ecqv}) the RSU issues an implicit certificate instead of signing the ticket, which saves the
 explicit key and signature. The certificate request point is bound into the proof context, so nobody
 can swap it on the air and receive a certificate for someone else's pseudonym.
 
 \subsection{Cheaper Authentication: TESLA with Adaptive Signing}
 
-With TESLA a BSM carries a 16-byte MAC under the current chain key instead of a signature. Keys are
+With TESLA~\cite{perrig2000tesla} a BSM carries a 16-byte MAC under the current chain key instead of a signature. Keys are
 disclosed two 25\,ms intervals later, in the vehicle's next BSM or in a small key message, so a
 receiver can accept the BSM after about 50\,ms. A signed anchor BSM carries the chain commitment. To
 avoid the TESLA delay when it brings nothing, the vehicle signs every BSM while its channel is quiet
@@ -249,7 +250,8 @@ BSMs become unnecessary, while every manoeuvre is still reported immediately.
 
 RSUs are grouped into clusters of $2\times2$, and a ticket is valid at every RSU of its cluster, so
 moving between them needs no messages at all. Before a ticket expires, the vehicle renews it with one
-signed request instead of a new proof.
+signed request instead of a new proof, the same idea as the lightweight re-authentication of
+handover schemes~\cite{varma2023zkp,xie2023handover}.
 
 \subsection{Load-Triggered Batch Verification}
 
@@ -262,7 +264,8 @@ bisection finds the invalid signatures.
 
 \subsection{Revocation that Reaches Vehicles}
 
-\textbf{Revocation filter.} Every fifth beacon (2\,Hz) carries a Bloom filter (7 hash functions, about 1\,\% false positives) of the pseudonyms
+\textbf{Revocation filter.} Instead of distributing revocation lists to every
+vehicle~\cite{raya2007securing}, every fifth beacon (2\,Hz) carries a Bloom filter~\cite{bloom1970} (7 hash functions, about 1\,\% false positives) of the pseudonyms
 revoked or quarantined within the last ticket lifetime. Vehicles drop BSMs from pseudonyms in the
 filter of the last beacon they verified. False positives are possible but rare, and they only drop
 a message.
@@ -288,7 +291,9 @@ wrong than right reports loses influence. Weights are stored on the ledger throu
 
 \subsection{Signal-Strength Check}
 
-An RSU estimates the sender's distance from the received power using the scenario's path-loss model
+Comparing a sender's claimed position with its received signal strength is an established check
+against position forgery and Sybil identities~\cite{xiao2006sybil}. An RSU estimates the sender's
+distance from the received power using the scenario's path-loss model
 with 4\,dB log-normal shadowing. It flags a BSM whose claimed position disagrees with that estimate
 by more than four standard deviations and by at least 100\,m. A position-forging attacker cannot
 move its own transmitter, so its claims stop matching its signal.
@@ -296,8 +301,9 @@ move its own transmitter, so its claims stop matching its signal.
 \section{Emergency Vehicles}\label{sec:emergency}
 
 Emergency vehicles need the opposite of anonymity on one point: their privileged status must be
-verifiable by everyone, and must be impossible to fake. The extension builds this on the
-authorization predicate (\ref{eq:access}).
+verifiable by everyone, and must be impossible to fake. Like the emergency-vehicle schemes
+of~\cite{li2026emergency} and BAAIoV~\cite{alsaeed2025baaiov}, the extension makes the class part of
+the credential; it builds this on the authorization predicate (\ref{eq:access}).
 \begin{enumerate}
   \item \textbf{Registration.} The TA registers an ambulance's pseudonyms with class
   \textit{emergency}. The class is in the Merkle leaf and in the proof context,
@@ -314,7 +320,7 @@ authorization predicate (\ref{eq:access}).
   itself proof of the lie: no detector judgment is involved. The first RSU that receives one reports
   the pseudonym at once with the message hash as evidence, and quarantine and revocation follow.
   \item \textbf{Priority.} Emergency logins, renewals and handovers, and the RSUs' answers to
-  them, are sent on the 802.11p access category AC\_VI instead of AC\_BE, so they do not wait
+  them, are sent on the 802.11p~\cite{jiang2008wave} access category~\cite{kenney2011dsrc} AC\_VI instead of AC\_BE, so they do not wait
   behind the queue of ordinary logins on the radio. Safety messages keep the highest category,
   AC\_VO. The RSU also verifies them ahead of its processing queue: such a login waits only for the
   job in progress. Because the claim is checked only by the verification itself, an RSU grants
@@ -341,7 +347,7 @@ and then sets the flag on all of its BSMs.
   \item \textbf{Accountability.} Every revocation and every reveal is a ledger transaction signed by
   identified organizations, and the ledger is append-only.
   \item \textbf{Limitations.} The TA knows at registration which pseudonyms belong to which vehicle.
-  The RSUs learn which pseudonym was where, and a global eavesdropper can link consecutive pseudonyms
-  by position. Anonymous credentials and mix zones would address both; they are left to future work
+  The RSUs learn which pseudonym was where, and a global eavesdropper~\cite{gruteser2005tracking} can link consecutive pseudonyms
+  by position. Anonymous credentials and mix zones~\cite{beresford2003mix,freudiger2007mix} would address both; they are left to future work
   (Chapter~\ref{ch:conclusion}).
 \end{itemize}

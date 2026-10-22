@@ -96,8 +96,8 @@ second at each RSU.
 
 \section{Protocol}
 
-The protocol package implements Chapter~\ref{ch:design}. Schnorr signatures and
-proofs use \texttt{coincurve} (libsecp256k1), and the escrow uses AES-GCM~\cite{nist80038d} from
+The protocol package implements Chapter~\ref{ch:design}. Schnorr~\cite{schnorr1991} signatures and
+proofs use \texttt{coincurve} (libsecp256k1~\cite{sec2}), and the escrow uses AES-GCM~\cite{nist80038d} from
 \texttt{cryptography}. Messages use a compact binary encoding: one byte per field
 name from an append-only table, binary hex strings, and 16-byte packed kinematics. Vehicles and RSUs
 are applications attached to ns-3 nodes through a small set of hooks: send, schedule, position, log
@@ -119,8 +119,8 @@ of farther senders.
 
 \section{Ledger}
 
-The chaincode is written in Go for Hyperledger Fabric~3.1.5 and deployed on a Fabric network with two
-peer organizations and an ordering service of one Raft orderer or four SmartBFT orderers. A Node.js
+The chaincode is written in Go for Hyperledger Fabric~\cite{androulaki2018fabric}~3.1.5 and deployed on a Fabric network with two
+peer organizations and an ordering service of one Raft~\cite{ongaro2014raft} orderer or four SmartBFT~\cite{barger2021smartbft} orderers. A Node.js
 gateway exposes it as a REST interface. It maps an \texttt{X-Identity} header to the caller's Fabric
 certificate, signs transactions, reports endorsement and commit times, and keeps an activity log. An
 HTTP conformance suite runs unchanged against the real gateway and against a mock with the same
@@ -152,11 +152,11 @@ figures, and an interactive results page. The tables and numbers in this report 
 the same outputs (Appendix~\ref{app:repro}).
 
 \textbf{Baselines.} Two baselines run on the same simulator. \emph{ECDSA-PKI} represents IEEE
-1609.2-style pseudonym certificates: the vehicle presents a CA-signed certificate and signs with
+1609.2-style pseudonym certificates~\cite{ieee16092}: the vehicle presents a CA-signed certificate and signs with
 ECDSA~\cite{johnson2001ecdsa} P-256, using the measured ECDSA costs. \emph{Central-TA} sends every login over the backbone
 to one central authority that decides and answers.
 
-\textbf{Tracker.} For privacy, a global eavesdropper records every BSM. A tracker then tries to link
+\textbf{Tracker.} For privacy, a global eavesdropper~\cite{gruteser2005tracking} records every BSM. A tracker then tries to link
 each new pseudonym to a disappearing one by predicting positions from the last speed and heading. The
 metrics are the share of pseudonym changes linked correctly and the share of a trip that can be
 followed from start to end.

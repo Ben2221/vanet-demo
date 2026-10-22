@@ -5,19 +5,19 @@
 This project designed, implemented and evaluated privacy-preserving authentication and authorization
 for VANETs that combines zero-knowledge proofs with a permissioned blockchain:
 \begin{itemize}
-  \item Vehicles prove registration and class with a Schnorr proof against a Merkle root on the
+  \item Vehicles prove registration and class with a Schnorr~\cite{schnorr1991} proof against a Merkle~\cite{merkle1987} root on the
   ledger, bound to the RSU, a fresh nonce and the requested service.
   \item RSUs decide access with ledger policies and issue short-lived tickets.
   \item Misbehaving pseudonyms are reported to the ledger and revoked by two reports.
   \item A threshold of RSU organizations can unmask a revoked vehicle.
   \item The ledger is kept off the safety-message path.
 \end{itemize}
-The complete system runs on ns-3 with SUMO mobility on a grid and on real Luxembourg traffic, with
+The complete system runs on ns-3~\cite{riley2010ns3} with SUMO~\cite{lopez2018sumo} mobility on a grid and on real Luxembourg traffic, with
 measured cryptographic costs, against certificate-based and centralised baselines and published
 schemes. Its login is as fast as presenting a certificate and costs about as much computation as
 BPA, and it puts \R{cmp/derived}{safety_factor} times less safety traffic on the channel than
 certificate-signed messages. Its revocation filter lets vehicles, not only RSUs, ignore
-revoked senders. On VeReMi Extension, the detector improves from an F1 score of \R{veremi}{rules_f1}
+revoked senders. On VeReMi~\cite{kamel2020veremiext} Extension, the detector improves from an F1 score of \R{veremi}{rules_f1}
 to \R{veremi}{hgb_window_f1}. Emergency vehicles are supported as a policy-restricted class whose
 alerts cannot be forged under a normal ticket.
 
@@ -27,7 +27,7 @@ alerts cannot be forged under a normal ticket.
   \item The evaluation is simulation-based; vehicle processing speed is an assumption bounded by a
   sensitivity sweep, not a measurement on OBU hardware.
   \item The TA knows which pseudonyms belong to which vehicle.
-  \item A global eavesdropper links most pseudonym changes by position and speed.
+  \item A global eavesdropper~\cite{gruteser2005tracking} links most pseudonym changes by position and speed.
   \item Login and handover messages are larger than in BPA, because the Merkle path travels with
   every proof.
   \item A coalition of $t$ RSU organizations can unmask any vehicle; this is the intended
@@ -35,7 +35,7 @@ alerts cannot be forged under a normal ticket.
   \item Learned detectors did not transfer reliably between road networks; the scheme uses rules
   and the signal-strength check.
   \item The processor part of the emergency priority lane is modelled approximately: work already
-  queued keeps its finish times. Any radio can use a higher access category, so the radio part
+  queued keeps its finish times. Any radio can use a higher access category~\cite{kenney2011dsrc}, so the radio part
   relies on the RSU's cap on priority answers rather than on enforcement.
 \end{itemize}
 
@@ -47,17 +47,17 @@ alerts cannot be forged under a normal ticket.
   zones~\cite{beresford2003mix,freudiger2007mix} against a global eavesdropper.
   \item Measure the cryptographic operations on OBU-class hardware, for example a Raspberry Pi or a
   commercial V2X unit, to replace the processor scaling factor.
-  \item Run the full parameter sweeps against the real Fabric network, distributed over several
+  \item Run the full parameter sweeps against the real Fabric~\cite{androulaki2018fabric} network, distributed over several
   machines.
   \item Verify the authentication and revocation protocols formally with Tamarin or ProVerif.
-  \item Evaluate stronger attackers: Sybil attacks with several own pseudonyms, adaptive attackers
+  \item Evaluate stronger attackers: Sybil~\cite{xiao2006sybil} attacks with several own pseudonyms, adaptive attackers
   that stay within plausibility limits, colluding vehicles, and flooding of RSUs.
   \item Train detectors that transfer between cities, using data from several maps or sequence
   models, and let vehicles vote cooperatively.
-  \item Add C-V2X (LTE/5G sidelink) next to 802.11p, for example with ns-3's 5G-LENA module.
-  \item Measure post-quantum signatures, such as Falcon or ML-DSA, whose size TESLA largely hides.
-  \item Encode messages in the IEEE 1609.2 / ETSI TS~103~097 formats, and compare with SCMS.
-  \item Scale to a full day of LuST and to further cities.
+  \item Add C-V2X (LTE/5G sidelink) next to 802.11p~\cite{jiang2008wave}, for example with ns-3's 5G-LENA module.
+  \item Measure post-quantum signatures, such as Falcon or ML-DSA, whose size TESLA~\cite{perrig2000tesla} largely hides.
+  \item Encode messages in the IEEE 1609.2~\cite{ieee16092} / ETSI TS~103~097 formats, and compare with SCMS~\cite{brecht2018scms}.
+  \item Scale to a full day of LuST~\cite{codeca2015lust} and to further cities.
   \item Extend the emergency extension with traffic-signal preemption through live SUMO control.
 \end{enumerate}
 
