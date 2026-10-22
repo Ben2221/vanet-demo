@@ -80,7 +80,7 @@ def load(sweep: Path) -> tuple[list[dict], list[str]]:
     if not f.exists():
         return [], []
     with f.open(newline="") as fh:
-        rows = list(csv.DictReader(fh))
+        rows = [r for r in csv.DictReader(fh) if not older(r)]
     if not rows:
         return [], []
     # variants in the order of the sweep's config (Phase-I before the baselines, ...)
@@ -99,6 +99,22 @@ def name(r: dict) -> str:
     return r.get("label") or r.get("profile") or r.get("protocol", "")
 
 
+# The report shows one version of this work, the final design (the v3-fast profile), as "This work"
+# next to the baselines. Earlier versions and variants stay in the sweeps but not in the report.
+OURS = "v3-fast"
+OLDER = ("Phase-I", "v2", "v2-mac", "v3-private")
+
+
+def older(r: dict) -> bool:
+    n = name(r)
+    return n in OLDER or n.startswith(("Phase-I ", "v2 "))
+
+
+def shown(r_or_name) -> str:
+    n = r_or_name if isinstance(r_or_name, str) else name(r_or_name)
+    return "This work" if n == OURS else n
+
+
 def cell(r: dict, col: str) -> str:
     m, ci = _f(r.get(col)), _f(r.get(col + "_ci95"))
     if m is None:
@@ -112,17 +128,32 @@ def head(col: str) -> str:
     return tex(h) + (f" ({tex(unit)})" if unit else "")
 
 
+def frame(caption: str, label: str, first: str, heads: list[str], sideways: bool = False):
+    """Opening and closing lines of a generated table. Headers are horizontal and wrap; a table is
+    shrunk to the available width, never enlarged; ``sideways`` puts a wide table on a landscape page."""
+    n = len(heads)
+    env = "sidewaystable" if sideways else "table"
+    width = "\\textheight" if sideways else "\\textwidth"
+    col = "1.4cm" if n > 5 else "2.1cm"
+    cells = [f"\\multicolumn{{1}}{{>{{\\raggedleft\\arraybackslash}}p{{{col}}}}}{{{h}}}" for h in heads]
+    head = [f"\\begin{{{env}}}" + ("" if sideways else "[htbp]") + "\\centering"
+            + ("\\footnotesize\\setlength{\\tabcolsep}{3.5pt}" if n > 5 else "\\small"),
+            f"\\caption{{{caption}}}\\label{{{label}}}",
+            f"\\resizebox{{\\ifdim\\width>{width}{width}\\else\\width\\fi}}{{!}}{{%",
+            "\\begin{tabular}{l" + "r" * n + "}", "\\toprule",
+            f"{first} & " + " & ".join(cells) + " \\\\", "\\midrule"]
+    return head, ["\\bottomrule", "\\end{tabular}}"], f"\\end{{{env}}}"
+
+
 def table(path: Path, rows: list[dict], metrics: list[str], caption: str, label: str,
           group: str | None = None, note: str = "") -> None:
     """One booktabs table: variants as rows, ``metrics`` as columns; with ``group`` a block of
-    rows per value of that column. Rotated headers keep wide tables on the page."""
+    rows per value of that column. Keep it to at most eight metrics: split wider tables."""
     metrics = [m for m in metrics if any(_f(r.get(m)) is not None for r in rows)]
     if not rows or not metrics:
         pending(path, caption, label)
         return
-    out = ["\\begin{table}[htbp]\\centering\\scriptsize", f"\\caption{{{caption}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{l" + "r" * len(metrics) + "}", "\\toprule",
-           "Variant & " + " & ".join(f"\\rotatebox{{70}}{{{head(m)}}}" for m in metrics) + " \\\\", "\\midrule"]
+    out, tail, end = frame(caption, label, "Variant", [head(m) for m in metrics], sideways=False)
     blocks: dict[str, list[dict]] = {}
     for r in rows:
         blocks.setdefault(r.get(group, "") if group else "", []).append(r)
@@ -133,11 +164,11 @@ def table(path: Path, rows: list[dict], metrics: list[str], caption: str, label:
                 out.append("\\midrule")
             out.append(f"\\multicolumn{{{len(metrics) + 1}}}{{l}}{{\\textit{{{tex(group)} = {tex(k)}}}}} \\\\")
         for r in blocks[k]:
-            out.append(tex(name(r)) + " & " + " & ".join(cell(r, m) for m in metrics) + " \\\\")
-    out += ["\\bottomrule", "\\end{tabular}}"]
+            out.append(tex(shown(r)) + " & " + " & ".join(cell(r, m) for m in metrics) + " \\\\")
+    out += tail
     if note:
         out.append(f"\\par\\smallskip\\parbox{{\\textwidth}}{{\\scriptsize {note}}}")
-    out.append("\\end{table}")
+    out.append(end)
     path.write_text("\n".join(out) + "\n")
 
 
@@ -187,15 +218,15 @@ def main() -> None:
     N.put("cmp", "vehicles", str(top) if top else "??")
     N.rows("cmp", sel)
     by = {name(r): r for r in sel}
-    p1, v3 = by.get("Phase-I", {}), by.get("v3-fast", {})
+    ref, v3 = by.get("ECDSA-PKI", {}), by.get(OURS, {})          # against the certificate baseline
     for col in ("ticket_ms_mean", "ticket_ms_steady_mean", "safety_bytes_per_vehicle_s", "cbr_rsu_mean",
-                "v2v_accept_ms_mean", "bsm_bytes", "handover_ms_mean"):
-        v = pct(p1.get(col), v3.get(col))
+                "handover_ms_mean"):
+        v = pct(ref.get(col), v3.get(col))
         if v is not None:
             N.put("cmp/derived", col + "_cut_pct", v)
-    if _f(p1.get("safety_bytes_per_vehicle_s")) and _f(v3.get("safety_bytes_per_vehicle_s")):
-        N.put("cmp/derived", "safety_factor", f"{_f(p1['safety_bytes_per_vehicle_s']) / _f(v3['safety_bytes_per_vehicle_s']):.1f}")
-    table(out / "tab_compare.tex", sel, HEADLINE[:8],
+    if _f(ref.get("safety_bytes_per_vehicle_s")) and _f(v3.get("safety_bytes_per_vehicle_s")):
+        N.put("cmp/derived", "safety_factor", f"{_f(ref['safety_bytes_per_vehicle_s']) / _f(v3['safety_bytes_per_vehicle_s']):.1f}")
+    table(out / "tab_compare.tex", sel, [m for m in HEADLINE[:8] if m != "ticket_ms_steady_mean"],
           f"Grid scenario, {top or '?'} vehicles: latency and overhead (ns-3, mean $\\pm$ 95\\,\\% CI over 5 seeds)",
           "tab:compare")
     table(out / "tab_compare_sec.tex", sel, HEADLINE[8:] + ["report_to_revocation_s_mean", "obu_cpu_util_mean"],
@@ -212,16 +243,10 @@ def main() -> None:
     for r in rows:
         N.rows(r.get("real", "?"), [r])
     table(out / "tab_lust.tex", rows, ["ticket_ms_mean", "ticket_ms_steady_mean", "safety_bytes_per_vehicle_s",
-                                       "pdr", "cbr_rsu_mean", "v2v_accept_ms_mean", "detection_rate", "honest_revoked"],
+                                       "pdr", "cbr_rsu_mean", "v2v_accept_ms_mean", "detection_rate"],
           "LuST (Luxembourg) traffic: low (06:00), mid (14:00) and peak (08:00) windows", "tab:lust", group="real")
 
-    # ---- ablation, compromised RSUs, sensitivity, mix zones, emergency
-    rows, _ = load(res / "ablation_v3")
-    N.rows("abl", rows)
-    table(out / "tab_ablation.tex", rows, ["ticket_ms_mean", "bsm_bytes", "safety_bytes_per_vehicle_s", "cbr_rsu_mean",
-                                           "v2v_accept_ms_mean", "v2v_revoked_accepted_ratio", "detection_rate",
-                                           "honest_revoked", "tracking_success"],
-          "Ablation: v2 plus one mechanism at a time (100 vehicles)", "tab:ablation")
+    # ---- compromised RSUs, sensitivity, emergency
     rows, _ = load(res / "trust_v3")
     N.rows("trust", rows)
     table(out / "tab_trust.tex", rows, ["detection_rate", "honest_revoked", "report_to_revocation_s_mean"],
@@ -232,9 +257,7 @@ def main() -> None:
             ("sensitivity_attack", "attack", "Detection per attack type",
              ["detection_rate", "honest_revoked", "report_to_revocation_s_mean"]),
             ("sensitivity_attackers", "attacker_ratio", "Share of attackers",
-             ["detection_rate", "honest_revoked", "pdr", "cbr_rsu_mean"]),
-            ("mixzone_tradeoff", "mix_silent_max", "Mix zones: longest silent period (s) against tracking",
-             ["tracking_success", "traceable_fraction", "silent_share", "awareness_error_m_p95"])):
+             ["detection_rate", "honest_revoked", "pdr", "cbr_rsu_mean"])):
         rows, _ = load(res / cfg)
         for r in rows:
             N.rows(f"{cfg}:{r.get(grp)}", [r])
@@ -243,9 +266,13 @@ def main() -> None:
     for r in rows:
         N.rows(f"ev:{r.get('real')}", [r])
     table(out / "tab_emergency.tex", rows, ["ev_ticket_ms_mean", "ev_ticket_ms_p95", "other_ticket_ms_mean",
-                                            "other_ticket_ms_p95", "ev_warned_ratio", "ev_alert_ms_mean",
-                                            "fake_alerts_accepted", "fake_logins_denied", "detection_rate"],
-          "Emergency vehicles (2\\,\\% of the honest vehicles) on LuST traffic", "tab:emergency", group="real")
+                                            "other_ticket_ms_p95"],
+          "Emergency vehicles (2\\,\\% of the honest vehicles) on LuST traffic: ticket times", "tab:emergency",
+          group="real")
+    table(out / "tab_emergency_sec.tex", rows, ["ev_warned_ratio", "ev_alert_ms_mean", "fake_alerts_accepted",
+                                                "fake_logins_denied", "detection_rate"],
+          "Emergency vehicles on LuST traffic: warnings and the fake-emergency attack", "tab:emergency-sec",
+          group="real")
 
     veremi(ROOT / "detection" / "results" / "veremi_benchmark.json", out / "tab_veremi.tex", N)
     # the Fabric benchmark is not part of the simulation sweeps: always the main results folder
@@ -257,8 +284,8 @@ def main() -> None:
 
 
 def significance(sweep: Path, top, path: Path) -> None:
-    """Welch's t-test of v3-fast and v3-private against Phase-I at the largest vehicle count."""
-    cap, label = "Welch's t-test against Phase-I (p-values; bold: p $<$ 0.05)", "tab:significance"
+    """Welch's t-test of this work against each baseline at the largest vehicle count."""
+    cap, label = "Welch's t-test of this work against each baseline (p-values; bold: p $<$ 0.05)", "tab:significance"
     f = sweep / "runs.csv"
     if not f.exists() or top is None:
         pending(path, cap, label)
@@ -266,13 +293,11 @@ def significance(sweep: Path, top, path: Path) -> None:
     from scipy.stats import ttest_ind
     with f.open(newline="") as fh:
         runs = [r for r in csv.DictReader(fh) if _f(r.get("vehicles")) == top]
-    cols = HEADLINE[:8] + ["v2v_revoked_accepted_ratio"]
-    out = ["\\begin{table}[htbp]\\centering\\scriptsize", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{l" + "r" * len(cols) + "}", "\\toprule",
-           "Challenger & " + " & ".join(f"\\rotatebox{{70}}{{{head(c)}}}" for c in cols) + " \\\\", "\\midrule"]
-    ref = [r for r in runs if r.get("label") == "Phase-I"]
-    for ch in ("v3-fast", "v3-private"):
-        cr = [r for r in runs if r.get("label") == ch]
+    cols = ["ticket_ms_mean", "handover_ms_mean", "safety_bytes_per_vehicle_s", "pdr", "cbr_rsu_mean"]
+    out, tail, end = frame(cap, label, "Baseline", [head(c) for c in cols])
+    cr = [r for r in runs if r.get("label") == OURS]
+    for ch in ("ECDSA-PKI", "Central-TA"):
+        ref = [r for r in runs if r.get("label") == ch]
         cells = []
         for c in cols:
             x = [v for v in (_f(r.get(c)) for r in ref) if v is not None]
@@ -283,7 +308,7 @@ def significance(sweep: Path, top, path: Path) -> None:
             p = float(ttest_ind(y, x, equal_var=False).pvalue)
             cells.append(f"\\textbf{{{p:.2g}}}" if p < 0.05 else f"{p:.2g}")
         out.append(f"{ch} & " + " & ".join(cells) + " \\\\")
-    out += ["\\bottomrule", "\\end{tabular}}", "\\end{table}"]
+    out += tail + [end]
     path.write_text("\n".join(out) + "\n")
 
 
@@ -303,7 +328,7 @@ def veremi(f: Path, path: Path, N: Numbers) -> None:
              "hgb_window": "Gradient boosting + history window",
              "hgb_window_calibrated": "\\quad + calibrated threshold"}
     out = ["\\begin{table}[htbp]\\centering\\small", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
+           "\\resizebox{\\ifdim\\width>\\textwidth\\textwidth\\else\\width\\fi}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
            "Detector & F1 & FPR & ROC AUC & Attackers reported \\\\", "\\midrule"]
     for k, lbl in names.items():
         if k not in summ:
@@ -329,7 +354,7 @@ def ledger(f: Path, path: Path, N: Numbers) -> None:
     names = {"raft_500ms": "Raft, 500 ms batch timeout", "raft_50ms": "Raft, 50 ms batch timeout",
              "bft_50ms": "SmartBFT, 50 ms batch timeout"}
     out = ["\\begin{table}[htbp]\\centering\\small", f"\\caption{{{cap}}}\\label{{{label}}}",
-           "\\resizebox{\\textwidth}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
+           "\\resizebox{\\ifdim\\width>\\textwidth\\textwidth\\else\\width\\fi}{!}{%", "\\begin{tabular}{lrrrr}", "\\toprule",
            "Ordering service & Offered (tx/s) & Achieved (tx/s) & p50 (ms) & p95 (ms) \\\\", "\\midrule"]
     for k, lbl in names.items():
         for i, r in enumerate(d.get(k, [])):
@@ -350,8 +375,7 @@ def compute(f: Path, path: Path, N: Numbers) -> None:
             ("sign", "Schnorr signature"), ("verify_sig", "Schnorr signature verification"),
             ("bsm_verify_one", "BSM signature verification"), ("tesla_mac", "TESLA MAC"),
             ("ecqv_issue", "ECQV certificate issue"), ("ecqv_reconstruct", "ECQV key reconstruction"),
-            ("bbs_prove", "BBS proof"), ("bbs_prove_online", "BBS proof, online part"),
-            ("bbs_verify", "BBS verification"), ("ecdsa_sign", "ECDSA P-256 sign (baseline)"),
+            ("ecdsa_sign", "ECDSA P-256 sign (baseline)"),
             ("ecdsa_verify", "ECDSA P-256 verify (baseline)")]
     out = ["\\begin{table}[htbp]\\centering\\small", f"\\caption{{{cap}}}\\label{{{label}}}",
            "\\begin{tabular}{lr}", "\\toprule", "Operation & Time (ms) \\\\", "\\midrule"]
@@ -409,7 +433,7 @@ def fig_grid(rows: list[dict], path: Path) -> None:
                          for r in rows if name(r) == lbl and _f(r.get(col)) is not None)
             if pts:
                 ax.errorbar([p[0] for p in pts], [p[1] for p in pts], yerr=[p[2] for p in pts], color=c,
-                            marker=m, ls=ls, lw=1.6, ms=4.5, capsize=2, label=lbl)
+                            marker=m, ls=ls, lw=1.6, ms=4.5, capsize=2, label=shown(lbl))
         ax.set_title(title, fontsize=8.5, color=INK, loc="left")
         ax.set_xticks(sorted({_f(r["vehicles"]) for r in rows}))
         ax.set_xlabel("vehicles")
@@ -442,7 +466,7 @@ def fig_bars(rows: list[dict], group: str, panels: list[tuple[str, str]], path: 
                 ys.append(_f(r.get(col)) or 0)
                 es.append(_f(r.get(col + "_ci95")) or 0)
             xs = [k + (i - (len(names) - 1) / 2) * w for k in range(len(groups))]
-            ax.bar(xs, ys, w * 0.9, yerr=es, color=c, label=n, capsize=1.5, error_kw={"lw": 0.8, "ecolor": INK})
+            ax.bar(xs, ys, w * 0.9, yerr=es, color=c, label=shown(n), capsize=1.5, error_kw={"lw": 0.8, "ecolor": INK})
         ax.set_xticks(range(len(groups)), [str(g).replace("lust:", "") for g in groups])
         ax.set_title(title, fontsize=8.5, color=INK, loc="left")
         ax.grid(axis="x", visible=False)
@@ -461,10 +485,7 @@ def figures(res: Path, dst: Path) -> None:
     fig_bars(rows, "real", [("ticket_ms_steady_mean", "Ticket after 10 s (ms)"),
                             ("safety_bytes_per_vehicle_s", "Safety traffic (B/s)"),
                             ("cbr_rsu_mean", "Channel busy ratio")], dst / "lust_overview.pdf",
-             series=["Phase-I", "v2", "v3-fast", "v3-private", "ECDSA-PKI", "Central-TA"])
-    rows, _ = load(res / "mixzone_tradeoff")
-    fig_bars(rows, "mix_silent_max", [("tracking_success", "Pseudonym changes linked"),
-                                      ("silent_share", "Share of time silent")], dst / "mixzone.pdf")
+             series=[OURS])
     rows, _ = load(res / "emergency")
     fig_bars(rows, "real", [("ev_ticket_ms_mean", "Emergency vehicle ticket (ms)"),
                             ("other_ticket_ms_mean", "Other vehicles' ticket (ms)"),

@@ -26,7 +26,7 @@ uses, and ends with the problem statement.
 \section{Threat Model}\label{sec:threat}
 
 \begin{itemize}
-  \item \textbf{Outsider attackers} can listen to every message (a global passive eavesdropper),
+  \item \textbf{Outsider attackers} can listen to every message (a global passive eavesdropper~\cite{gruteser2005tracking}),
   inject, replay and modify messages, but hold no registered credential.
   \item \textbf{Insider attackers} are registered vehicles that send false information: false
   positions or speeds, sudden-stop claims, message floods, and, in the emergency extension, false
@@ -44,7 +44,8 @@ outside the scope.
 
 \section{Cryptographic Building Blocks}
 
-All public-key operations use the elliptic curve secp256k1 with generator $G$ of prime order $q$.
+All public-key operations use the elliptic curve secp256k1~\cite{sec2} with generator $G$ of prime
+order $q$, and the hash function $H$ is SHA-256~\cite{fips1804}.
 
 \subsection{Schnorr Proof of Knowledge}
 
@@ -90,7 +91,7 @@ Tickets and handover requests use Schnorr signatures. The compact wire format us
 BIP-340~\cite{bip340} 64-byte signatures with 32-byte x-only keys.
 
 TESLA~\cite{perrig2000tesla} replaces a signature per message with a message authentication code
-(MAC) under a key from a one-way hash chain $K_i = H(K_{i+1})$. The sender uses $K_i$ during
+(MAC) under a key from a one-way hash chain~\cite{lamport1981password} $K_i = H(K_{i+1})$. The sender uses $K_i$ during
 interval $i$ and discloses it $d$ intervals later. A receiver buffers the message, checks the
 disclosed key against the signed chain commitment, and then the MAC. A MAC is 16 bytes and about ten
 times cheaper to compute than a signature; the cost is a delay of about $d$ intervals before a message
@@ -101,21 +102,13 @@ certificate carries a point $P_U$ from which any receiver reconstructs the holde
 $Q_U = H(\mathit{cert})\,P_U + Q_{CA}$. A certificate is about 64 bytes smaller than an explicit
 key plus signature, and it is authenticated implicitly by the first signature verified under $Q_U$.
 
-\subsection{BBS Anonymous Credentials}
-
-With BBS signatures~\cite{boneh2004bbs,tessaro2023bbs} the TA signs a hidden vehicle secret, the
-class and the epoch once. The vehicle then proves in zero knowledge that it holds such a signature,
-and derives its pseudonym as $\mathit{nym}_j = H(\mathit{epoch}, j)^{sk_v}$ for $j < J$. Two proofs
-cannot be linked to each other, and the scope $j$ limits the number of pseudonyms per epoch, which
-bounds Sybil attacks. No per-pseudonym registration is needed.
-
 \subsection{Bloom Filters}
 
 A Bloom filter~\cite{bloom1970} represents a set in $m$ bits with $k$ hash functions. It has no false
 negatives and a tunable false-positive rate. The extension uses one to put the recently revoked
 pseudonyms into RSU beacons.
 
-\section{Permissioned Blockchain: Hyperledger Fabric}
+\section{Permissioned Blockchain: Hyperledger Fabric}\label{sec:bg-fabric}
 
 Hyperledger Fabric~\cite{androulaki2018fabric} is a permissioned blockchain in which every
 participant has a certificate from its organization's Membership Service Provider (MSP). A
@@ -123,10 +116,41 @@ transaction is executed by the endorsing peers (\emph{execute}), ordered into bl
 service (\emph{order}) and validated and committed by every peer (\emph{validate}). Smart contracts,
 called chaincode, can read the caller's identity and therefore enforce role-based rules: only the TA
 may register roots or policies, and only RSUs may record authentications or report misbehaviour.
-The ordering service runs either Raft~\cite{ongaro2014raft}, which tolerates crashes of a minority of
-orderers, or SmartBFT~\cite{barger2021smartbft}, which tolerates $f$ Byzantine orderers out of
-$n \ge 3f+1$ and commits after $2f+1$ matching votes. Blocks are cut when a batch is full or after a
-batch timeout, which is the main term in commit latency.
+
+\textbf{Blocks.} Block $i$ holds $m$ transactions and a header that commits to them and to the
+previous header:
+\begin{equation}
+  D_i = H(\mathit{tx}_{i,1} \,\|\, \dots \,\|\, \mathit{tx}_{i,m}), \qquad
+  h_i = H(i \,\|\, h_{i-1} \,\|\, D_i).
+\end{equation}
+Changing any recorded transaction changes $D_i$, hence $h_i$ and every later header, so a peer that
+holds $h_j$ for some $j \ge i$ detects the change.
+
+\textbf{Validation.} A transaction $T$ carries the endorsements $E(T)$ of the peers that executed it
+and the read set $\mathit{RS}(T)$ of keys and versions it read. Every peer commits it only if
+\begin{equation}
+  \mathrm{EP}\bigl(E(T)\bigr) = \mathrm{true}
+  \;\wedge\; \forall (k, v) \in \mathit{RS}(T):\ \mathrm{ver}(k) = v,
+\end{equation}
+that is, if the endorsements satisfy the chaincode's endorsement policy $\mathrm{EP}$ (here the
+default, a majority of the peer organizations) and no key it read has changed since (multi-version
+concurrency control). Otherwise the transaction stays in the block but is marked invalid.
+
+\textbf{Ordering.} The ordering service runs either Raft~\cite{ongaro2014raft} or
+SmartBFT~\cite{barger2021smartbft}. Raft commits a block once a majority of the $n$ orderers have
+stored it and so tolerates $f$ crashed orderers for $n = 2f+1$. SmartBFT tolerates $f$ Byzantine
+orderers for $n \ge 3f+1$~\cite{lamport1982byzantine,castro1999pbft} and commits after $2f+1$
+matching votes; the deployment uses $n = 4$, $f = 1$.
+
+\textbf{Commit latency.} A write becomes visible after
+\begin{equation}
+  T_{\mathrm{commit}} = T_{\mathrm{endorse}} + T_{\mathrm{batch}} + T_{\mathrm{order}}
+  + T_{\mathrm{validate}}, \qquad 0 \le T_{\mathrm{batch}} \le \tau,
+  \label{eq:commit}
+\end{equation}
+where $T_{\mathrm{batch}}$ is the wait until the orderer cuts the block. While blocks fill more slowly
+than their maximum size, a block is cut $\tau$ after its first transaction (the batch timeout), so
+$\tau$ dominates at low load.
 
 \section{Misbehaviour Detection}
 
@@ -135,7 +159,7 @@ broadcast a false position. Misbehaviour detection checks plausibility: a vehicl
 than physically possible, accelerate beyond a limit, or be heard from beyond radio range. The VeReMi
 dataset~\cite{heijden2018veremi} and its extension~\cite{kamel2020veremiext} are the standard
 benchmark: realistic traces with 19 labelled attack types, among them constant or random position
-and speed offsets, sudden stops, replay, denial of service and Sybil variants.
+and speed offsets, sudden stops, replay, denial of service and Sybil~\cite{xiao2006sybil} variants.
 
 \section{Problem Statement}
 
@@ -147,5 +171,5 @@ Design a VANET authentication and authorization scheme that
   without placing the blockchain on the path of individual safety messages;
   \item removes misbehaving vehicles with conditional traceability that no single party controls;
 \end{enumerate}
-and evaluate on a realistic 802.11p network with real traffic whether its latency, channel load and
+and evaluate on a realistic 802.11p~\cite{jiang2008wave} network with real traffic whether its latency, channel load and
 detection performance are acceptable compared with certificate-based and centralized baselines.

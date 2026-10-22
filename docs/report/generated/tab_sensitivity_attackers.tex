@@ -1,3 +1,18 @@
-\begin{table}[htbp]\centering\caption{Share of attackers}\label{tab:sensitivity-attackers}
-\fbox{\parbox{0.8\textwidth}{\centering\textbf{Results pending:} this sweep has not finished yet (make evaluate-all, then python experiments/thesis\_data.py).}}
+\begin{table}[htbp]\centering\small
+\caption{Share of attackers}\label{tab:sensitivity-attackers}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Caught} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Honest revoked} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} \\
+\midrule
+\multicolumn{5}{l}{\textit{attacker\_ratio = 0.0}} \\
+This work & -- & 0.0 & 0.996 $\pm$ 0.001 & 0.034 $\pm$ 0.001 \\
+\midrule
+\multicolumn{5}{l}{\textit{attacker\_ratio = 0.1}} \\
+This work & 1.00 & 0.0 & 0.997 $\pm$ 0.002 & 0.035 $\pm$ 0.002 \\
+\midrule
+\multicolumn{5}{l}{\textit{attacker\_ratio = 0.3}} \\
+This work & 1.00 & 0.0 & 0.997 $\pm$ 0.001 & 0.036 $\pm$ 0.001 \\
+\bottomrule
+\end{tabular}}
 \end{table}

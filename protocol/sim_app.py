@@ -164,14 +164,19 @@ def _stats(env) -> dict:
 
 
 def _emergency_on(cfg: dict) -> bool:
-    return float(cfg.get("emergency_ratio") or 0) > 0 or cfg.get("attack") == "fake_emergency"
+    return (float(cfg.get("emergency_ratio") or 0) > 0 or bool(cfg.get("emergency_vehicles"))
+            or cfg.get("attack") == "fake_emergency")
 
 
 def _is_emergency(node, cfg: dict) -> bool:
     """--emergency-ratio: a fixed, seed-dependent choice among the honest vehicles (a hash,
     not the scenario RNG, so the rest of the run draws the same random numbers)."""
+    if getattr(node, "is_attacker", False):
+        return False
+    if cfg.get("emergency_vehicles"):                    # --emergency-vehicles: by name
+        return node.name in str(cfg["emergency_vehicles"]).split(",")
     ratio = float(cfg.get("emergency_ratio") or 0)
-    if ratio <= 0 or getattr(node, "is_attacker", False):
+    if ratio <= 0:
         return False
     h = hashlib.sha256(f"{cfg.get('seed', 1)}:{node.name}:emergency".encode()).digest()
     return int.from_bytes(h[:8], "big") / 2 ** 64 < ratio
@@ -835,6 +840,8 @@ class VehicleApp:
         self.ev_on = _emergency_on(cfg)
         self.fake_ev = getattr(node, "is_attacker", False) and cfg.get("attack") == "fake_emergency"
         self.fake_ev_tried = False
+        # a flooding attacker controls its OBU: it sends every beacon, dead reckoning or not
+        self.flood = getattr(node, "is_attacker", False) and cfg.get("attack") == "flood"
         self.attack_start = float(cfg.get("attack_start") or 0.0)
         self.ev_heard: dict[int, float] = {}              # emergency sender node -> last accepted alert
         self.radio_priority = EV_RADIO_PRIORITY if self.emergency and cfg.get("emergency_priority") else None
@@ -937,7 +944,8 @@ class VehicleApp:
         err = self._prediction_error(state, sim_time)
         if err is not None and not node.is_attacker:
             st["awareness"].append(err)
-        if self.dr and not (urgent or ev) and not self._dr_due(state, sim_time, err):
+        flooding = self.flood and sim_time >= self.attack_start
+        if self.dr and not (urgent or ev or flooding) and not self._dr_due(state, sim_time, err):
             st["dr_skipped"] += 1
             return b""
         st["urgent"] += urgent

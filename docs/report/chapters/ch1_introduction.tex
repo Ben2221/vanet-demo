@@ -61,8 +61,8 @@ overhead?}
   revocations and identity-reveal approvals live on a permissioned blockchain.
   \item Support the whole lifecycle: registration, authentication, handover, renewal, signed safety
   messages, detection and reporting, revocation and threshold identity reveal.
-  \item Implement it completely: protocol, chaincode and gateway on Hyperledger Fabric, detector, and
-  a network simulation on ns-3 with SUMO mobility.
+  \item Implement it completely: protocol, chaincode and gateway on Hyperledger Fabric~\cite{androulaki2018fabric}, detector, and
+  a network simulation on ns-3~\cite{riley2010ns3} with SUMO~\cite{lopez2018sumo} mobility.
   \item Measure it on realistic traffic against established baselines, report means with confidence
   intervals and significance tests, and state the limitations.
   \item Reduce the measured latency and overhead without weakening the security model, and handle
@@ -75,14 +75,13 @@ overhead?}
   \item A complete authentication and authorization lifecycle that keeps the blockchain off the
   critical path of safety messages: proofs are verified at the RSU, and the ledger holds only the
   state that has to be shared and audited (Chapter~\ref{ch:design}).
-  \item A set of optimisations (TESLA, implicit certificates, RSU clusters, dead reckoning,
-  revocation filters, fast quarantine, trust-weighted reports, batch verification) and a privacy
-  profile (BBS credentials, cooperative mix zones), each measured on its own in an ablation
-  (Chapter~\ref{ch:opt}).
+  \item Mechanisms that make the scheme cheap on the radio channel and robust against misbehaving
+  vehicles and RSUs: TESLA~\cite{perrig2000tesla}, implicit certificates, RSU clusters, dead reckoning, revocation filters,
+  fast quarantine, trust-weighted reports and batch verification~\cite{bellare1998batch} (Section~\ref{sec:mechanisms}).
   \item An emergency-vehicle extension: class-bound credentials, a policy-restricted service,
   signed siren alerts that cannot be forged under a normal ticket, and a priority lane at RSUs.
   \item A reproducible evaluation framework: ns-3 802.11p with real Luxembourg traffic, measured
-  cryptographic costs on a per-node processor model, the VeReMi Extension detection benchmark, a
+  cryptographic costs on a per-node processor model, the VeReMi~\cite{kamel2020veremiext} Extension detection benchmark, a
   Fabric consensus benchmark, ten parameter sweeps, and a live browser visualisation for
   demonstrations (Chapters~\ref{ch:impl} and~\ref{ch:results}).
 \end{itemize}

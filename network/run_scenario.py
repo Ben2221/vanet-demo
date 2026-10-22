@@ -123,6 +123,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "default: experiments/compute_times_all.json or protocol/compute_times.json "
                         "if present, 'none' for zero delays")
     g.add_argument("--attacker-ratio", type=float, default=0.0, help="fraction of vehicles that lie in BSMs")
+    g.add_argument("--attacker-vehicles", default="",
+                   help="comma-separated vehicle names that attack (instead of --attacker-ratio), e.g. veh1")
     g.add_argument("--attack", default="const_pos",
                    help="const_pos, random_pos, const_speed, random_speed, sudden_stop, flood, fake_emergency")
     g.add_argument("--attack-start", type=float, default=30.0, help="s after which attackers start lying")
@@ -204,6 +206,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--emergency-ratio", type=float, default=0.0,
                    help="fraction of the honest vehicles registered as emergency vehicles: they log in for "
                         "the emergency service and broadcast signed alerts (siren on)")
+    g.add_argument("--emergency-vehicles", default="",
+                   help="comma-separated vehicle names registered as emergency vehicles (instead of "
+                        "--emergency-ratio), e.g. veh2")
     g.add_argument("--emergency-priority", action="store_true",
                    help="RSUs verify emergency-service logins ahead of their CPU queue (needs --rsu-cpu)")
 
@@ -391,8 +396,19 @@ def main(argv: list[str] | None = None) -> dict:
         congestion_control=a.congestion_control, cbr_threshold=a.cbr_threshold,
         pdr_range=a.pdr_range, log_bsm=a.log_bsm, detector=load_detector(a.detector, a.detector_mode, a.detector_model),
         attacker_ratio=a.attacker_ratio, attack=a.attack, attack_start=a.attack_start,
+        attacker_names=[n for n in a.attacker_vehicles.split(",") if n],
         compute_times=compute_times, ledger_sync=a.ledger_sync, backbone_ms=a.backbone_ms, config=config,
     )
+    if backend_name == "ns3" and a.netanim:
+        # NetAnim: normal vehicles blue, attackers red, emergency vehicles orange, RSUs grey
+        from protocol.sim_app import _is_emergency
+        for h in scenario.vehicles:
+            if h.is_attacker:
+                backend.color(h.id, (220, 30, 30), 11)
+                backend.describe(h.id, f"{h.name} (attacker)")
+            elif _is_emergency(h, config):
+                backend.color(h.id, (255, 150, 0), 11)
+                backend.describe(h.id, f"{h.name} (emergency)")
     narrator = None
     if a.live:
         from experiments.live import Narrator

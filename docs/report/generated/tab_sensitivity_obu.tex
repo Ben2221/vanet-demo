@@ -1,3 +1,18 @@
-\begin{table}[htbp]\centering\caption{Vehicle processor speed: measured times $\times$ 1, 5, 10}\label{tab:sensitivity-obu}
-\fbox{\parbox{0.8\textwidth}{\centering\textbf{Results pending:} this sweep has not finished yet (make evaluate-all, then python experiments/thesis\_data.py).}}
+\begin{table}[htbp]\centering\small
+\caption{Vehicle processor speed: measured times $\times$ 1, 5, 10}\label{tab:sensitivity-obu}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{V2V accept (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{OBU load} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{V2V verified} \\
+\midrule
+\multicolumn{5}{l}{\textit{obu\_scale = 1}} \\
+This work & 1.59 $\pm$ 0.17 & 0.55 $\pm$ 0.00 & 0.0011 $\pm$ 0.0001 & 0.995 $\pm$ 0.002 \\
+\midrule
+\multicolumn{5}{l}{\textit{obu\_scale = 5}} \\
+This work & 1.59 $\pm$ 0.17 & 0.92 $\pm$ 0.01 & 0.0056 $\pm$ 0.0006 & 0.995 $\pm$ 0.002 \\
+\midrule
+\multicolumn{5}{l}{\textit{obu\_scale = 10}} \\
+This work & 1.59 $\pm$ 0.17 & 1.39 $\pm$ 0.00 & 0.0113 $\pm$ 0.0011 & 0.995 $\pm$ 0.002 \\
+\bottomrule
+\end{tabular}}
 \end{table}

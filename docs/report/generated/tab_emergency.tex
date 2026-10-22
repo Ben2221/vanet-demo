@@ -1,3 +1,14 @@
-\begin{table}[htbp]\centering\caption{Emergency vehicles (2\,\% of the honest vehicles) on LuST traffic}\label{tab:emergency}
-\fbox{\parbox{0.8\textwidth}{\centering\textbf{Results pending:} this sweep has not finished yet (make evaluate-all, then python experiments/thesis\_data.py).}}
+\begin{table}[htbp]\centering\small
+\caption{Emergency vehicles (2\,\% of the honest vehicles) on LuST traffic: ticket times}\label{tab:emergency}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{EV ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{EV ticket p95 (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Other ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Other ticket p95 (ms)} \\
+\midrule
+\multicolumn{5}{l}{\textit{real = lust:mid}} \\
+EV, no priority & 40.31 $\pm$ 19.85 & 161.8 $\pm$ 136.4 & 42.45 $\pm$ 8.58 & 170.8 $\pm$ 38.9 \\
+EV + priority & 12.06 $\pm$ 4.08 & 30.1 $\pm$ 21.2 & 40.17 $\pm$ 5.98 & 172.4 $\pm$ 21.8 \\
+EV + priority, fake-EV attack & 11.87 $\pm$ 6.34 & 30.1 $\pm$ 21.2 & 39.74 $\pm$ 5.77 & 172.0 $\pm$ 22.1 \\
+\bottomrule
+\end{tabular}}
 \end{table}

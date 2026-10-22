@@ -11,16 +11,19 @@ hand over between RSUs. Smart-contract policies decide which vehicle classes may
 RSUs run a misbehaviour detector, report suspicious pseudonyms to the ledger, where two reports
 revoke a pseudonym, and a threshold of RSU organizations can jointly unmask a revoked vehicle, which
 then loses all of its pseudonyms. The work further adds TESLA broadcast authentication, implicit
-certificates, dead-reckoning message triggering, revocation filters, BBS credentials, mix zones and
-emergency vehicles.
+certificates, dead-reckoning message triggering, revocation filters and emergency vehicles.
 
 The system runs on ns-3 (IEEE 802.11p) with SUMO mobility on a grid and on real Luxembourg traffic
-(LuST), with measured cryptographic costs. At \R{cmp}{vehicles} vehicles, the optimised profile issues a ticket in
-\R{cmp/v3-fast}{ticket_ms_mean}\,ms instead of \R{cmp/Phase-I}{ticket_ms_mean}\,ms, cuts the
-safety traffic per vehicle by a factor of \R{cmp/derived}{safety_factor} and the channel busy ratio
-from \R{cmp/Phase-I}{cbr_rsu_mean} to \R{cmp/v3-fast}{cbr_rsu_mean}, and lets vehicles reject
-messages from revoked senders (\R{cmp/v3-fast}{v2v_revoked_accepted_ratio} still accepted, against
-all of them in Phase~I), while every attacker is caught and no honest vehicle is revoked. On the
+(LuST), with measured cryptographic costs, against an IEEE 1609.2-style certificate baseline and a
+central authority. At \R{cmp}{vehicles} vehicles on the grid, a zero-knowledge login takes
+\R{cmp/v3-fast}{ticket_ms_mean}\,ms, as fast as presenting a certificate
+(\R{cmp/ECDSA-PKI}{ticket_ms_mean}\,ms) and far faster than a central authority
+(\R{cmp/Central-TA}{ticket_ms_mean}\,ms). The scheme puts \R{cmp/derived}{safety_factor} times less
+safety traffic on the channel than certificate-signed messages, lowers the channel busy ratio from
+\R{cmp/ECDSA-PKI}{cbr_rsu_mean} to \R{cmp/v3-fast}{cbr_rsu_mean}, and lets vehicles reject messages
+from revoked senders (\R{cmp/v3-fast}{v2v_revoked_accepted_ratio} still accepted), while every
+attacker is caught and no honest vehicle is revoked. Its login costs about as much computation as
+BPA and far less than ZAMA and B-TSCA, priced with the same unit costs. On the
 VeReMi Extension dataset the detector reaches an F1 score of \R{veremi}{hgb_window_f1}, up from
 \R{veremi}{rules_f1} for plausibility rules alone. A Fabric~3.1.5 benchmark compares Raft and
 SmartBFT ordering for the ledger operations.

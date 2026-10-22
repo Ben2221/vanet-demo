@@ -81,6 +81,7 @@ class Scenario:
                  congestion_control: bool = False, cbr_threshold: float = 0.6,
                  pdr_range: float = 300.0, log_bsm: bool = False, detector=None,
                  attacker_ratio: float = 0.0, attack: str = "const_pos", attack_start: float = 0.0,
+                 attacker_names: list[str] | None = None,
                  compute_times: dict | None = None, ledger_sync: float = 1.0, backbone_ms: float = 2.0,
                  config: dict | None = None) -> None:
         self.backend = backend
@@ -134,7 +135,9 @@ class Scenario:
         # ---- attackers (ground truth written to attackers.csv for evaluation)
         self.attacks: dict[int, Attack] = {}
         n_att = int(round(attacker_ratio * len(self.vehicles)))
-        for h in self.rng.sample(self.vehicles, n_att) if n_att else []:
+        chosen = ([h for h in self.vehicles if h.name in attacker_names] if attacker_names
+                  else self.rng.sample(self.vehicles, n_att) if n_att else [])
+        for h in chosen:
             h.is_attacker = True
             self.attacks[h.id] = Attack(attack, random.Random(self.rng.random()))
         self.attack_start = attack_start

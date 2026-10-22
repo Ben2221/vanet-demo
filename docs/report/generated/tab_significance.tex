@@ -1,12 +1,12 @@
-\begin{table}[htbp]\centering\scriptsize
-\caption{Welch's t-test against Phase-I (p-values; bold: p $<$ 0.05)}\label{tab:significance}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrrrrrrr}
+\begin{table}[htbp]\centering\small
+\caption{Welch's t-test of this work against each baseline (p-values; bold: p $<$ 0.05)}\label{tab:significance}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrrr}
 \toprule
-Challenger & \rotatebox{70}{Ticket (ms)} & \rotatebox{70}{Ticket after 10 s (ms)} & \rotatebox{70}{Handover (ms)} & \rotatebox{70}{BSM size (B)} & \rotatebox{70}{Safety traffic (B/s)} & \rotatebox{70}{PDR} & \rotatebox{70}{CBR} & \rotatebox{70}{V2V accept (ms)} & \rotatebox{70}{Revoked accepted} \\
+Baseline & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Handover (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} \\
 \midrule
-v3-fast & \textbf{1.2e-05} & -- & \textbf{7.9e-08} & \textbf{7.5e-13} & \textbf{7.4e-11} & \textbf{4.7e-06} & \textbf{9.9e-10} & \textbf{1.1e-07} & \textbf{5e-15} \\
-v3-private & \textbf{3.6e-07} & -- & \textbf{0.0001} & \textbf{6.6e-13} & \textbf{2.6e-10} & \textbf{1.9e-06} & \textbf{1.5e-09} & \textbf{8.7e-08} & \textbf{4.3e-14} \\
+ECDSA-PKI & 0.069 & 0.25 & \textbf{5.7e-10} & \textbf{4.8e-05} & \textbf{5.6e-08} \\
+Central-TA & \textbf{5.4e-13} & \textbf{4e-12} & \textbf{5.7e-10} & \textbf{2.7e-05} & \textbf{4.3e-08} \\
 \bottomrule
 \end{tabular}}
 \end{table}

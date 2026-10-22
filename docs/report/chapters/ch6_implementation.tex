@@ -29,7 +29,7 @@ from a Makefile. This chapter describes the parts and how they connect.
 \caption{Simulation and evaluation pipeline}\label{fig:pipeline}
 \end{figure}
 
-Figure~\ref{fig:pipeline} shows the pipeline. SUMO decides where every vehicle drives. ns-3 models
+Figure~\ref{fig:pipeline} shows the pipeline. SUMO~\cite{lopez2018sumo} decides where every vehicle drives. ns-3 models
 the radio: transmission, propagation, collisions and the MAC. The protocol code runs inside every
 vehicle and RSU node and talks to the ledger and the detector. Every event is logged to
 \texttt{metrics.csv}, from which the evaluation computes all results. Table~\ref{tab:code} lists
@@ -42,8 +42,8 @@ the main parts of the code.
 Folder & Contents \\
 \midrule
 \texttt{mobility/} & grid and LuST scenario builders, SUMO-to-ns-2 trace conversion, RSU placement \\
-\texttt{network/} & scenario runner, ns-3 and lite radio backends, node hooks, metrics, ledger bridge, live map \\
-\texttt{protocol/} & vehicle and RSU logic, cryptography, message encoding, registration, escrow, TESLA, ECQV, BBS, Bloom filter, batch verification, V2V verifier, simulator glue \\
+\texttt{network/} & scenario runner, ns-3 radio backend, node hooks, metrics, ledger bridge, live map \\
+\texttt{protocol/} & vehicle and RSU logic, cryptography, message encoding, registration, escrow, TESLA, ECQV, Bloom filter, batch verification, V2V verifier, simulator glue \\
 \texttt{ledger/} & Fabric network scripts, Go chaincode, Node.js REST gateway, mock ledger, conformance tests, load benchmark \\
 \texttt{detection/} & detector (rules, features, learned models), VeReMi loaders, benchmark and training \\
 \texttt{experiments/} & sweep configurations, runner, collection, reports, plots, results page, tracker attack \\
@@ -96,9 +96,9 @@ second at each RSU.
 
 \section{Protocol}
 
-The protocol package implements Chapters~\ref{ch:design} and~\ref{ch:opt}. Schnorr signatures and
-proofs use \texttt{coincurve} (libsecp256k1), the escrow uses AES-GCM from \texttt{cryptography}, and
-BBS uses an arkworks BLS12-381 binding. Messages use a compact binary encoding: one byte per field
+The protocol package implements Chapter~\ref{ch:design}. Schnorr~\cite{schnorr1991} signatures and
+proofs use \texttt{coincurve} (libsecp256k1~\cite{sec2}), and the escrow uses AES-GCM~\cite{nist80038d} from
+\texttt{cryptography}. Messages use a compact binary encoding: one byte per field
 name from an append-only table, binary hex strings, and 16-byte packed kinematics. Vehicles and RSUs
 are applications attached to ns-3 nodes through a small set of hooks: send, schedule, position, log
 and the local ledger copy.
@@ -119,8 +119,8 @@ of farther senders.
 
 \section{Ledger}
 
-The chaincode is written in Go for Hyperledger Fabric~3.1.5 and deployed on a Fabric network with two
-peer organizations and an ordering service of one Raft orderer or four SmartBFT orderers. A Node.js
+The chaincode is written in Go for Hyperledger Fabric~\cite{androulaki2018fabric}~3.1.5 and deployed on a Fabric network with two
+peer organizations and an ordering service of one Raft~\cite{ongaro2014raft} orderer or four SmartBFT~\cite{barger2021smartbft} orderers. A Node.js
 gateway exposes it as a REST interface. It maps an \texttt{X-Identity} header to the caller's Fabric
 certificate, signs transactions, reports endorsement and commit times, and keeps an activity log. An
 HTTP conformance suite runs unchanged against the real gateway and against a mock with the same
@@ -134,10 +134,12 @@ mock's commit time.
 The detector computes per-message plausibility features against the pseudonym's history: implied
 speed, speed and position consistency over 0.8--3\,s baselines, acceleration, heading change,
 message rate, distance from the RSU, the signal-strength distance and sequence numbers. It applies the
-rules of Section~\ref{sec:detect}. A learned variant (gradient-boosted trees over the same features plus a
-history window) is trained on VeReMi Extension~\cite{kamel2020veremiext} or on simulator logs. The
-\texttt{hybrid} mode combines rules with the learned score. The benchmark uses five vehicle-disjoint
-splits, so that no vehicle's messages appear in both training and test data.
+rules of Section~\ref{sec:detect}. For comparison, learned models over the same features (a random
+forest and gradient-boosted trees~\cite{friedman2001gbm} with a history window, built with
+scikit-learn~\cite{pedregosa2011sklearn}) are trained and tested on VeReMi
+Extension~\cite{kamel2020veremiext}, on five vehicle-disjoint splits so that no vehicle's messages
+appear in both training and test data. The scheme itself uses the rules and the signal-strength
+check, which do not depend on the road network.
 
 \section{Evaluation Framework}\label{sec:eval-framework}
 
@@ -145,16 +147,16 @@ A sweep is a JSON configuration: fixed options, a grid of parameters (for exampl
 vehicles), the variants to compare and the seeds. The runner executes every combination in parallel
 and skips finished runs. A collection step turns each run's event log into about 100 metrics. The
 report step computes means with 95\,\% confidence intervals over the seeds and Welch's
-t-test~\cite{welch1947} against Phase-I, and writes Markdown and LaTeX tables, PNG, PDF and SVG
+t-test~\cite{welch1947} against each baseline, and writes Markdown and LaTeX tables, PNG, PDF and SVG
 figures, and an interactive results page. The tables and numbers in this report are generated from
 the same outputs (Appendix~\ref{app:repro}).
 
 \textbf{Baselines.} Two baselines run on the same simulator. \emph{ECDSA-PKI} represents IEEE
-1609.2-style pseudonym certificates: the vehicle presents a CA-signed certificate and signs with
-ECDSA P-256, using the measured ECDSA costs. \emph{Central-TA} sends every login over the backbone
+1609.2-style pseudonym certificates~\cite{ieee16092}: the vehicle presents a CA-signed certificate and signs with
+ECDSA~\cite{johnson2001ecdsa} P-256, using the measured ECDSA costs. \emph{Central-TA} sends every login over the backbone
 to one central authority that decides and answers.
 
-\textbf{Tracker.} For privacy, a global eavesdropper records every BSM. A tracker then tries to link
+\textbf{Tracker.} For privacy, a global eavesdropper~\cite{gruteser2005tracking} records every BSM. A tracker then tries to link
 each new pseudonym to a disappearing one by predicting positions from the last speed and heading. The
 metrics are the share of pseudonym changes linked correctly and the share of a trip that can be
 followed from start to end.
@@ -171,7 +173,7 @@ its speed.
 
 \begin{figure}[htbp]\centering
 \includegraphics[width=0.85\textwidth]{figures/live_map_vehicle.png}
-\caption{Live map of a running ns-3 simulation (grid, 50 vehicles, v3-fast with emergency vehicles).
+\caption{Live map of a running ns-3 simulation (grid, 50 vehicles, with emergency vehicles).
 The selected emergency vehicle shows its registered class and its \texttt{emergency-priority}
 ticket; revoked attackers are marked with a cross; the feed narrates detection and revocation.}
 \label{fig:livemap}
