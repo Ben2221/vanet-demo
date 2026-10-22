@@ -151,7 +151,7 @@ signal-strength check transfer across cities.
 On VeReMi Extension (\R{veremi}{messages} messages from \R{veremi}{vehicles} vehicles,
 Table~\ref{tab:veremi}), the plausibility rules alone reach an F1 score of \R{veremi}{rules_f1} with
 no false positives. They miss subtle attacks such as small constant offsets, which stay within
-physical limits. Learned models over the same features reach \R{veremi}{rf_f1} (random forest), and
+physical limits. Learned models over the same features reach \R{veremi}{rf_f1} (random forest~\cite{breiman2001rf}), and
 gradient boosting with a history window \R{veremi}{hgb_window_f1} at a false-positive rate of
 \R{veremi}{hgb_window_fpr}.
 
@@ -233,6 +233,66 @@ within 300\,m of an emergency vehicle that held a verified alert from it at most
 delay, and the outcome of the fake-emergency attack. The design requirement is that no fake alert is
 ever accepted, and that every fake emergency login is denied by the policy or rejected because the
 pseudonym is already quarantined.
+
+\section{Comparison with Published Schemes}\label{sec:res-literature}
+
+Published schemes report their results on different simulators, hardware and libraries, so their
+numbers cannot be placed next to ours directly: BPA~\cite{li2024bpa}, for example, measured an
+elliptic-curve point multiplication at 0.233\,ms, our implementation at 0.016\,ms. The usual fair
+comparison counts the cryptographic operations of one authentication and prices them with one set
+of unit costs. Table~\ref{tab:literature} does this with BPA's published unit costs, the only set
+that covers all the schemes. For BPA, ZAMA~\cite{xi2022zama} and B-TSCA~\cite{wang2021btsca} it
+copies the operation counts, times and message sizes that BPA publishes (its Tables 4 and 5). For
+our scheme it counts the operations of the protocol in Chapter~\ref{ch:design} and prices only the
+point multiplications and hashes, which dominate; the message sizes are measured in the ns-3 runs.
+
+\begin{table}[htbp]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Cost of one authentication and one re-authentication (handover), priced with BPA's unit
+costs (point multiplication 0.233\,ms, hash 0.0055\,ms, pairing 4.756\,ms)}\label{tab:literature}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lllrllrr}
+\toprule
+Scheme & Ledger on the & \multicolumn{2}{l}{Authentication} & \multicolumn{2}{l}{Re-authentication} &
+\multicolumn{2}{l}{Messages (B)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+ & login path & operations & ms & operations & ms & auth. & re-auth. \\
+\midrule
+ZAMA~\cite{xi2022zama} & no & $11E + 5M + \dots$ & 2.64 & $2E + \dots$ & 1.76 & 1200 & 472 \\
+B-TSCA~\cite{wang2021btsca} & lookup & $6E + 2P + 4H + \dots$ & 10.11 & $6E + 2P + 2H + \dots$ & 10.10 & 72 & 136 \\
+BPA~\cite{li2024bpa} & re-auth. & $8\mathit{PM} + 3H + \dots$ & 1.91 & $7\mathit{PM} + H + \dots$ & 1.65 & 386 & 240 \\
+This work & no & $8\mathit{PM} + 15H$ & 1.95 & $10\mathit{PM} + 6H$ & 2.36 & 716 & 410 \\
+\bottomrule
+\end{tabular}}
+\par\smallskip\parbox{\textwidth}{\scriptsize $\mathit{PM}$: point multiplication, $H$: hash, $E$: modular
+exponentiation, $M$: modular multiplication, $P$: bilinear pairing; ``$\dots$'' are the cheaper
+operations listed in~\cite{li2024bpa}. Rows 1--3 and their times are as published in~\cite{li2024bpa}
+(its Table~5 gives 386\,B for BPA's authentication, its Figure~8 368\,B). This work: authentication
+= vehicle checks the beacon (2\,PM) and proves (1\,PM), RSU checks the Merkle path (10\,H) and the
+proof (2\,PM) and signs the ticket (1\,PM), vehicle checks the ticket (2\,PM); handover = vehicle
+checks the beacon and signs the request (3\,PM), the new RSU checks the old ticket and the request
+(4\,PM) and signs a new ticket (1\,PM), vehicle checks it (2\,PM). Message sizes: request plus
+ticket response, measured in ns-3.}
+\end{table}
+
+The comparison is mixed, and Table~\ref{tab:literature} shows why. In computation our login is on a
+par with BPA, which also builds on elliptic-curve operations (eight point multiplications each),
+cheaper than ZAMA, whose zero-knowledge proof uses modular exponentiations, and about five times
+cheaper than B-TSCA, whose two pairings alone cost 9.5\,ms. Our messages are larger: the Merkle path
+(nine hashes, 288\,B) travels with every proof, which is what lets the RSU check membership without
+learning which registered vehicle it is talking to. Our handover costs more than BPA's
+re-authentication, because the new RSU checks a signed ticket and a signed request instead of
+looking up a shared trust key; RSU clusters (Section~\ref{sec:res-ablation}) avoid most of these
+handovers instead.
+
+The largest difference is architectural. BAAIoV~\cite{alsaeed2025baaiov} authenticates every vehicle
+through a Hyperledger Fabric transaction and reports 150\,ms at 50 vehicles rising to 187\,ms at
+150 vehicles, measured with SUMO and Fabric but without a radio model. Our design keeps the ledger
+off the login path: on the grid with 150 vehicles a login completes in
+\R{cmp/v3-fast}{ticket_ms_mean}\,ms end to end over 802.11p, while the ledger records it in the
+background in the tens to hundreds of milliseconds that Table~\ref{tab:ledger} measures.
+The two blockchain-and-ZKP schemes closest to ours, Wang et~al.~\cite{wang2025privacy} and the
+emergency-vehicle scheme of Li et~al.~\cite{li2026emergency}, are compared in Chapter~\ref{ch:lit}
+by their properties only.
 
 \section{Discussion}
 

@@ -44,7 +44,8 @@ outside the scope.
 
 \section{Cryptographic Building Blocks}
 
-All public-key operations use the elliptic curve secp256k1 with generator $G$ of prime order $q$.
+All public-key operations use the elliptic curve secp256k1~\cite{sec2} with generator $G$ of prime
+order $q$, and the hash function $H$ is SHA-256~\cite{fips1804}.
 
 \subsection{Schnorr Proof of Knowledge}
 
@@ -90,7 +91,7 @@ Tickets and handover requests use Schnorr signatures. The compact wire format us
 BIP-340~\cite{bip340} 64-byte signatures with 32-byte x-only keys.
 
 TESLA~\cite{perrig2000tesla} replaces a signature per message with a message authentication code
-(MAC) under a key from a one-way hash chain $K_i = H(K_{i+1})$. The sender uses $K_i$ during
+(MAC) under a key from a one-way hash chain~\cite{lamport1981password} $K_i = H(K_{i+1})$. The sender uses $K_i$ during
 interval $i$ and discloses it $d$ intervals later. A receiver buffers the message, checks the
 disclosed key against the signed chain commitment, and then the MAC. A MAC is 16 bytes and about ten
 times cheaper to compute than a signature; the cost is a delay of about $d$ intervals before a message
@@ -125,7 +126,7 @@ called chaincode, can read the caller's identity and therefore enforce role-base
 may register roots or policies, and only RSUs may record authentications or report misbehaviour.
 The ordering service runs either Raft~\cite{ongaro2014raft}, which tolerates crashes of a minority of
 orderers, or SmartBFT~\cite{barger2021smartbft}, which tolerates $f$ Byzantine orderers out of
-$n \ge 3f+1$ and commits after $2f+1$ matching votes. Blocks are cut when a batch is full or after a
+$n \ge 3f+1$~\cite{lamport1982byzantine,castro1999pbft} and commits after $2f+1$ matching votes. Blocks are cut when a batch is full or after a
 batch timeout, which is the main term in commit latency.
 
 \section{Misbehaviour Detection}

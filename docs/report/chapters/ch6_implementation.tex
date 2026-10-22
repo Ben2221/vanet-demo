@@ -29,7 +29,7 @@ from a Makefile. This chapter describes the parts and how they connect.
 \caption{Simulation and evaluation pipeline}\label{fig:pipeline}
 \end{figure}
 
-Figure~\ref{fig:pipeline} shows the pipeline. SUMO decides where every vehicle drives. ns-3 models
+Figure~\ref{fig:pipeline} shows the pipeline. SUMO~\cite{lopez2018sumo} decides where every vehicle drives. ns-3 models
 the radio: transmission, propagation, collisions and the MAC. The protocol code runs inside every
 vehicle and RSU node and talks to the ledger and the detector. Every event is logged to
 \texttt{metrics.csv}, from which the evaluation computes all results. Table~\ref{tab:code} lists
@@ -97,8 +97,8 @@ second at each RSU.
 \section{Protocol}
 
 The protocol package implements Chapters~\ref{ch:design} and~\ref{ch:opt}. Schnorr signatures and
-proofs use \texttt{coincurve} (libsecp256k1), the escrow uses AES-GCM from \texttt{cryptography}, and
-BBS uses an arkworks BLS12-381 binding. Messages use a compact binary encoding: one byte per field
+proofs use \texttt{coincurve} (libsecp256k1), the escrow uses AES-GCM~\cite{nist80038d} from \texttt{cryptography}, and
+BBS uses an arkworks BLS12-381~\cite{bowe2017bls} binding. Messages use a compact binary encoding: one byte per field
 name from an append-only table, binary hex strings, and 16-byte packed kinematics. Vehicles and RSUs
 are applications attached to ns-3 nodes through a small set of hooks: send, schedule, position, log
 and the local ledger copy.
@@ -134,8 +134,8 @@ mock's commit time.
 The detector computes per-message plausibility features against the pseudonym's history: implied
 speed, speed and position consistency over 0.8--3\,s baselines, acceleration, heading change,
 message rate, distance from the RSU, the signal-strength distance and sequence numbers. It applies the
-rules of Section~\ref{sec:detect}. A learned variant (gradient-boosted trees over the same features plus a
-history window) is trained on VeReMi Extension~\cite{kamel2020veremiext} or on simulator logs. The
+rules of Section~\ref{sec:detect}. A learned variant (gradient-boosted trees~\cite{friedman2001gbm} over the same features plus a
+history window, built with scikit-learn~\cite{pedregosa2011sklearn}) is trained on VeReMi Extension~\cite{kamel2020veremiext} or on simulator logs. The
 \texttt{hybrid} mode combines rules with the learned score. The benchmark uses five vehicle-disjoint
 splits, so that no vehicle's messages appear in both training and test data.
 
@@ -151,7 +151,7 @@ the same outputs (Appendix~\ref{app:repro}).
 
 \textbf{Baselines.} Two baselines run on the same simulator. \emph{ECDSA-PKI} represents IEEE
 1609.2-style pseudonym certificates: the vehicle presents a CA-signed certificate and signs with
-ECDSA P-256, using the measured ECDSA costs. \emph{Central-TA} sends every login over the backbone
+ECDSA~\cite{johnson2001ecdsa} P-256, using the measured ECDSA costs. \emph{Central-TA} sends every login over the backbone
 to one central authority that decides and answers.
 
 \textbf{Tracker.} For privacy, a global eavesdropper records every BSM. A tracker then tries to link

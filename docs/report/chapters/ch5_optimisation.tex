@@ -94,7 +94,8 @@ reported it gets a weight
 \begin{equation}
   w = \min\!\left(1,\ \frac{2\,(\mathit{tp}+1)}{\mathit{tp}+\mathit{fp}+2}\right),
 \end{equation}
-where $\mathit{tp}$ and $\mathit{fp}$ count its confirmed and wrong reports. Revocation then needs a
+where $\mathit{tp}$ and $\mathit{fp}$ count its confirmed and wrong reports. This is twice the expected
+trust of the beta reputation system~\cite{josang2002beta}, capped at 1. Revocation then needs a
 report weight of at least $K$ instead of $K$ reporters. An honest RSU keeps weight 1; an RSU with more
 wrong than right reports loses influence. Weights are stored on the ledger through
 \texttt{SetReporterWeight}.
