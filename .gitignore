@@ -1,7 +1,35 @@
+# Python environments and caches
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Node.js dependencies
+node_modules/
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local project archives
+/*.zip
 
 # generated SUMO scenarios (rebuilt on demand by mobility/build_scenario.py)
 mobility/out/
