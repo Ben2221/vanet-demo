@@ -28,7 +28,7 @@ Vehicle verification & BSMs of senders within 100\,m \\
 \end{table}
 
 Table~\ref{tab:setup} lists the common parameters. \emph{This work} is the scheme of
-Chapters~\ref{ch:design} and~\ref{ch:opt}; it is compared with the two baselines of
+Chapter~\ref{ch:design}; it is compared with the two baselines of
 Section~\ref{sec:eval-framework}, which run on the same simulator, and in
 Section~\ref{sec:res-literature} with published schemes.
 
@@ -249,7 +249,7 @@ cheaper than B-TSCA, whose two pairings alone cost 9.5\,ms. Our messages are lar
 (nine hashes, 288\,B) travels with every proof, which is what lets the RSU check membership without
 learning which registered vehicle it is talking to. Our handover costs more than BPA's
 re-authentication, because the new RSU checks a signed ticket and a signed request instead of
-looking up a shared trust key; RSU clusters (Chapter~\ref{ch:opt}) avoid most of these
+looking up a shared trust key; RSU clusters (Section~\ref{sec:mechanisms}) avoid most of these
 handovers instead.
 
 The largest difference is architectural. BAAIoV~\cite{alsaeed2025baaiov} authenticates every vehicle

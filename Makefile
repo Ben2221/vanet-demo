@@ -15,7 +15,7 @@ PORT     ?= 3100
 LEDGER   ?= mock
 JOBS     ?= 4
 
-.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay scenarios scenario-low scenario-high scenario-mixed viz emergency report evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
+.PHONY: help setup test test-ledger run run-ns3 quick compare compare-v3 ablation-v3 trust-v3 evaluate-v3 demo live replay scenarios scenario-3obu scenario-low scenario-veryhigh viz emergency report evaluate-all compare-lust detector-benchmark detector-model report show mock gateway fabric-up fabric-down ledger-bench clean-results
 
 help:
 	@echo "make setup          create .venv and install everything (./setup.sh)"
@@ -174,27 +174,33 @@ replay: $(PY)
 
 # three demo scenarios on the grid (ns-3, this work), each recorded with a NetAnim file in which
 # normal vehicles are blue, attackers red, emergency vehicles orange and RSUs grey:
-#   make scenarios            record all three (experiments/results/scenarios/, ~4 min)
-#   make scenario-low         30 vehicles, live map + narration (http://127.0.0.1:8765)
-#   make scenario-high        150 vehicles, live
-#   make scenario-mixed       60 vehicles with 10 % attackers and 10 % emergency vehicles, live
-SCN = $(PY) network/run_scenario.py --seed 1 --backend ns3 --protocol real --mobility-step 0.1 \
-	--rsu-spacing 450 --attacker-ratio 0.1 --attack random_pos --rsu-cpu --v2v-verify --privacy-log \
+#   make scenarios             record all three (experiments/results/scenarios/, ~10 min; survives a
+#                              closed terminal, progress in experiments/results/scenarios/*.log)
+#   make scenario-3obu         3 vehicles: veh0 normal, veh1 attacker (from 40 s), veh2 emergency, live
+#   make scenario-low          30 vehicles, live map + narration (http://127.0.0.1:8765)
+#   make scenario-veryhigh     300 vehicles, live (slower than real time: ns-3 needs ~4 s per simulated s)
+SCN = PYTHONUNBUFFERED=1 $(PY) network/run_scenario.py --seed 1 --backend ns3 --protocol real \
+	--mobility-step 0.1 --rsu-spacing 450 --attack random_pos --rsu-cpu --v2v-verify --privacy-log \
 	--compute-times experiments/compute_times_v3.json --profile v3-fast
-SCN_LOW   = --vehicles 30 --duration 120 --attack-start 40
-SCN_HIGH  = --vehicles 150 --duration 90 --attack-start 30
-SCN_MIXED = --vehicles 60 --duration 120 --attack-start 40 --emergency-ratio 0.1 --emergency-priority
-SCN_LIVE  = --live --live-pace 1 --viz --viz-port $(VIZ_PORT)
+SCN_3OBU     = --vehicles 3 --duration 120 --attack-start 40 --attacker-vehicles veh1 \
+	--emergency-vehicles veh2 --emergency-priority
+SCN_LOW      = --vehicles 30 --duration 120 --attack-start 40 --attacker-ratio 0.1
+SCN_VERYHIGH = --vehicles 300 --duration 60 --attack-start 20 --attacker-ratio 0.1
+SCN_LIVE     = --live --live-pace 1 --viz --viz-port $(VIZ_PORT)
+SCN_DIR      = experiments/results/scenarios
 scenarios: $(PY)
-	$(SCN) $(SCN_LOW) --netanim --live --out experiments/results/scenarios/1_low_density 2>/dev/null > experiments/results/scenarios/1_low_density.log
-	$(SCN) $(SCN_HIGH) --netanim --live --out experiments/results/scenarios/2_high_density 2>/dev/null > experiments/results/scenarios/2_high_density.log
-	$(SCN) $(SCN_MIXED) --netanim --live --out experiments/results/scenarios/3_all_node_types 2>/dev/null > experiments/results/scenarios/3_all_node_types.log
+	mkdir -p $(SCN_DIR)
+	nohup sh -c '$(SCN) $(SCN_3OBU) --netanim --live --out $(SCN_DIR)/1_three_obus > $(SCN_DIR)/1_three_obus.log 2>/dev/null; \
+	  $(SCN) $(SCN_LOW) --netanim --live --out $(SCN_DIR)/2_low_density > $(SCN_DIR)/2_low_density.log 2>/dev/null; \
+	  $(SCN) $(SCN_VERYHIGH) --netanim --live --out $(SCN_DIR)/3_very_high_density > $(SCN_DIR)/3_very_high_density.log 2>/dev/null' \
+	  > /dev/null 2>&1 &
+	@echo "recording in the background; follow with: tail -f $(SCN_DIR)/*.log"
+scenario-3obu: $(PY)
+	$(SCN) $(SCN_3OBU) $(SCN_LIVE) --out experiments/results/viz/scenario_3obu 2>/dev/null
 scenario-low: $(PY)
 	$(SCN) $(SCN_LOW) $(SCN_LIVE) --out experiments/results/viz/scenario_low 2>/dev/null
-scenario-high: $(PY)
-	$(SCN) $(SCN_HIGH) $(SCN_LIVE) --out experiments/results/viz/scenario_high 2>/dev/null
-scenario-mixed: $(PY)
-	$(SCN) $(SCN_MIXED) $(SCN_LIVE) --out experiments/results/viz/scenario_mixed 2>/dev/null
+scenario-veryhigh: $(PY)
+	$(SCN) $(SCN_VERYHIGH) $(SCN_LIVE) --out experiments/results/viz/scenario_veryhigh 2>/dev/null
 
 mock: $(PY)
 	@if ss -ltnH "sport = :$(PORT)" 2>/dev/null | grep -q .; then \

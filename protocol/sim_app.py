@@ -164,14 +164,19 @@ def _stats(env) -> dict:
 
 
 def _emergency_on(cfg: dict) -> bool:
-    return float(cfg.get("emergency_ratio") or 0) > 0 or cfg.get("attack") == "fake_emergency"
+    return (float(cfg.get("emergency_ratio") or 0) > 0 or bool(cfg.get("emergency_vehicles"))
+            or cfg.get("attack") == "fake_emergency")
 
 
 def _is_emergency(node, cfg: dict) -> bool:
     """--emergency-ratio: a fixed, seed-dependent choice among the honest vehicles (a hash,
     not the scenario RNG, so the rest of the run draws the same random numbers)."""
+    if getattr(node, "is_attacker", False):
+        return False
+    if cfg.get("emergency_vehicles"):                    # --emergency-vehicles: by name
+        return node.name in str(cfg["emergency_vehicles"]).split(",")
     ratio = float(cfg.get("emergency_ratio") or 0)
-    if ratio <= 0 or getattr(node, "is_attacker", False):
+    if ratio <= 0:
         return False
     h = hashlib.sha256(f"{cfg.get('seed', 1)}:{node.name}:emergency".encode()).digest()
     return int.from_bytes(h[:8], "big") / 2 ** 64 < ratio
