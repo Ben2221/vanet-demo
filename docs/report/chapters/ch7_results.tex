@@ -129,8 +129,9 @@ in the run. No honest vehicle was revoked.
 \section{Ablation: What Each Mechanism Contributes}\label{sec:res-ablation}
 
 \gentab{tab_ablation}
+\gentab{tab_ablation_sec}
 
-Table~\ref{tab:ablation} starts from v2 and adds one mechanism at a time. It separates the
+Tables~\ref{tab:ablation} and~\ref{tab:ablation-sec} start from v2 and add one mechanism at a time. It separates the
 mechanisms that reduce bytes on the air (TESLA, implicit certificates, dead reckoning) from those
 that reduce latency or handovers (clusters, renewal, batch verification under load), and those that
 change security properties (revocation filter, signal-strength check) or privacy (BBS, mix zones).
@@ -217,16 +218,17 @@ with vehicle processors as fast as the development PC, 5 times slower, and 10 ti
 \section{Emergency Vehicles}\label{sec:res-emergency}
 
 \gentab{tab_emergency}
+\gentab{tab_emergency_sec}
 
 \begin{figure}[htbp]\centering
 \genfig[\textwidth]{emergency}
 \caption{Emergency vehicles on LuST: ticket times and warning coverage}\label{fig:emergency}
 \end{figure}
 
-Table~\ref{tab:emergency} evaluates the extension of Section~\ref{sec:emergency} on the 14:00 LuST
+Tables~\ref{tab:emergency} and~\ref{tab:emergency-sec} evaluate the extension of Section~\ref{sec:emergency} on the 14:00 LuST
 traffic (v3-fast, 60\,s runs), where
-the start-up burst creates long radio queues at the RSUs. It compares the ticket time of emergency vehicles with
-that of all other vehicles, with and without the priority lane. It also reports the share of vehicles
+the start-up burst creates long radio queues at the RSUs. The first compares the ticket time of emergency vehicles with
+that of all other vehicles, with and without the priority lane. The second reports the share of vehicles
 within 300\,m of an emergency vehicle that held a verified alert from it at most 1\,s old, the alert
 delay, and the outcome of the fake-emergency attack. The design requirement is that no fake alert is
 ever accepted, and that every fake emergency login is denied by the policy or rejected because the

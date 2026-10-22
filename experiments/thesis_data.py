@@ -132,12 +132,12 @@ def frame(caption: str, label: str, first: str, heads: list[str], sideways: bool
 def table(path: Path, rows: list[dict], metrics: list[str], caption: str, label: str,
           group: str | None = None, note: str = "") -> None:
     """One booktabs table: variants as rows, ``metrics`` as columns; with ``group`` a block of
-    rows per value of that column. More than eight metrics go on a landscape page."""
+    rows per value of that column. Keep it to at most eight metrics: split wider tables."""
     metrics = [m for m in metrics if any(_f(r.get(m)) is not None for r in rows)]
     if not rows or not metrics:
         pending(path, caption, label)
         return
-    out, tail, end = frame(caption, label, "Variant", [head(m) for m in metrics], sideways=len(metrics) > 8)
+    out, tail, end = frame(caption, label, "Variant", [head(m) for m in metrics], sideways=False)
     blocks: dict[str, list[dict]] = {}
     for r in rows:
         blocks.setdefault(r.get(group, "") if group else "", []).append(r)
@@ -234,9 +234,11 @@ def main() -> None:
     rows, _ = load(res / "ablation_v3")
     N.rows("abl", rows)
     table(out / "tab_ablation.tex", rows, ["ticket_ms_mean", "bsm_bytes", "safety_bytes_per_vehicle_s", "cbr_rsu_mean",
-                                           "v2v_accept_ms_mean", "v2v_revoked_accepted_ratio", "detection_rate",
-                                           "honest_revoked", "tracking_success"],
-          "Ablation: v2 plus one mechanism at a time (100 vehicles)", "tab:ablation")
+                                           "v2v_accept_ms_mean"],
+          "Ablation: v2 plus one mechanism at a time (100 vehicles): latency and overhead", "tab:ablation")
+    table(out / "tab_ablation_sec.tex", rows, ["v2v_revoked_accepted_ratio", "detection_rate", "honest_revoked",
+                                               "tracking_success"],
+          "Ablation: v2 plus one mechanism at a time (100 vehicles): security and privacy", "tab:ablation-sec")
     rows, _ = load(res / "trust_v3")
     N.rows("trust", rows)
     table(out / "tab_trust.tex", rows, ["detection_rate", "honest_revoked", "report_to_revocation_s_mean"],
@@ -258,9 +260,13 @@ def main() -> None:
     for r in rows:
         N.rows(f"ev:{r.get('real')}", [r])
     table(out / "tab_emergency.tex", rows, ["ev_ticket_ms_mean", "ev_ticket_ms_p95", "other_ticket_ms_mean",
-                                            "other_ticket_ms_p95", "ev_warned_ratio", "ev_alert_ms_mean",
-                                            "fake_alerts_accepted", "fake_logins_denied", "detection_rate"],
-          "Emergency vehicles (2\\,\\% of the honest vehicles) on LuST traffic", "tab:emergency", group="real")
+                                            "other_ticket_ms_p95"],
+          "Emergency vehicles (2\\,\\% of the honest vehicles) on LuST traffic: ticket times", "tab:emergency",
+          group="real")
+    table(out / "tab_emergency_sec.tex", rows, ["ev_warned_ratio", "ev_alert_ms_mean", "fake_alerts_accepted",
+                                                "fake_logins_denied", "detection_rate"],
+          "Emergency vehicles on LuST traffic: warnings and the fake-emergency attack", "tab:emergency-sec",
+          group="real")
 
     veremi(ROOT / "detection" / "results" / "veremi_benchmark.json", out / "tab_veremi.tex", N)
     # the Fabric benchmark is not part of the simulation sweeps: always the main results folder

@@ -1,14 +1,14 @@
-\begin{sidewaystable}\centering\footnotesize\setlength{\tabcolsep}{3.5pt}
-\caption{Emergency vehicles (2\,\% of the honest vehicles) on LuST traffic}\label{tab:emergency}
-\resizebox{\ifdim\width>\textheight\textheight\else\width\fi}{!}{%
-\begin{tabular}{lrrrrrrrrr}
+\begin{table}[htbp]\centering\small
+\caption{Emergency vehicles (2\,\% of the honest vehicles) on LuST traffic: ticket times}\label{tab:emergency}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrr}
 \toprule
-Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{EV ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{EV ticket p95 (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Other ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Other ticket p95 (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Warned in 1 s} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Alert delay (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Fake alerts accepted} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Fake logins denied} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Caught} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{EV ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{EV ticket p95 (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Other ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Other ticket p95 (ms)} \\
 \midrule
-\multicolumn{10}{l}{\textit{real = lust:mid}} \\
-EV, no priority & 40.31 $\pm$ 19.85 & 161.8 $\pm$ 136.4 & 42.45 $\pm$ 8.58 & 170.8 $\pm$ 38.9 & 0.988 $\pm$ 0.006 & 1.25 $\pm$ 0.01 & 0 & 0.0 & 0.89 $\pm$ 0.06 \\
-EV + priority & 12.06 $\pm$ 4.08 & 30.1 $\pm$ 21.2 & 40.17 $\pm$ 5.98 & 172.4 $\pm$ 21.8 & 0.980 $\pm$ 0.043 & 1.27 $\pm$ 0.03 & 0 & 0.0 & 0.89 $\pm$ 0.06 \\
-EV + priority, fake-EV attack & 11.87 $\pm$ 6.34 & 30.1 $\pm$ 21.2 & 39.74 $\pm$ 5.77 & 172.0 $\pm$ 22.1 & 0.985 $\pm$ 0.014 & 1.27 $\pm$ 0.03 & 0 & 24.0 $\pm$ 4.3 & 0.88 $\pm$ 0.09 \\
+\multicolumn{5}{l}{\textit{real = lust:mid}} \\
+EV, no priority & 40.31 $\pm$ 19.85 & 161.8 $\pm$ 136.4 & 42.45 $\pm$ 8.58 & 170.8 $\pm$ 38.9 \\
+EV + priority & 12.06 $\pm$ 4.08 & 30.1 $\pm$ 21.2 & 40.17 $\pm$ 5.98 & 172.4 $\pm$ 21.8 \\
+EV + priority, fake-EV attack & 11.87 $\pm$ 6.34 & 30.1 $\pm$ 21.2 & 39.74 $\pm$ 5.77 & 172.0 $\pm$ 22.1 \\
 \bottomrule
 \end{tabular}}
-\end{sidewaystable}
+\end{table}

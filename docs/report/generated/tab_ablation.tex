@@ -1,29 +1,29 @@
-\begin{sidewaystable}\centering\footnotesize\setlength{\tabcolsep}{3.5pt}
-\caption{Ablation: v2 plus one mechanism at a time (100 vehicles)}\label{tab:ablation}
-\resizebox{\ifdim\width>\textheight\textheight\else\width\fi}{!}{%
-\begin{tabular}{lrrrrrrrrr}
+\begin{table}[htbp]\centering\small
+\caption{Ablation: v2 plus one mechanism at a time (100 vehicles): latency and overhead}\label{tab:ablation}
+\resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
+\begin{tabular}{lrrrrr}
 \toprule
-Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{BSM size (B)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{CBR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{V2V accept (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Revoked accepted} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Caught} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Honest revoked} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Tracked} \\
+Variant & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{BSM size (B)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{V2V accept (ms)} \\
 \midrule
-v2 & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v3-fast & 1.45 $\pm$ 0.01 & 155 $\pm$ 1 & 300 $\pm$ 24 & 0.035 $\pm$ 0.002 & 0.92 $\pm$ 0.00 & 0.001 $\pm$ 0.002 & 1.00 & 0.0 & 1.00 \\
-v3-private & 6.20 $\pm$ 0.26 & 157 $\pm$ 1 & 254 $\pm$ 14 & 0.034 $\pm$ 0.002 & 0.92 $\pm$ 0.01 & 0.002 $\pm$ 0.002 & 1.00 & 0.0 & 0.76 $\pm$ 0.08 \\
-v2 +mac & 1.77 $\pm$ 0.09 & 113 $\pm$ 0 & 1046 $\pm$ 12 & 0.096 $\pm$ 0.005 & 1.15 $\pm$ 0.03 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +tesla & 1.80 $\pm$ 0.18 & 117 $\pm$ 0 & 1087 $\pm$ 15 & 0.098 $\pm$ 0.005 & 92.49 $\pm$ 0.84 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +tesla adaptive & 1.80 $\pm$ 0.11 & 148 $\pm$ 0 & 1374 $\pm$ 14 & 0.110 $\pm$ 0.006 & 0.92 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +tesla fast keys & 1.99 & 118 & 1506 & 0.138 & 44.84 & 1.000 & 1.00 & 0.0 & 1.00 \\
-v2 +tesla fast keys & 1.97 & 117 & 1493 & 0.134 & 45.74 & 1.000 & 1.00 & 0.0 & 1.00 \\
-v2 +tesla fast keys & 2.26 & 118 & 1499 & 0.142 & 43.15 & 1.000 & 1.00 & 0.0 & 0.98 \\
-v2 +implicit-cert & 1.87 $\pm$ 0.12 & 131 $\pm$ 0 & 1211 $\pm$ 13 & 0.103 $\pm$ 0.005 & 0.88 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +clusters & 1.81 $\pm$ 0.09 & 139 $\pm$ 0 & 1293 $\pm$ 20 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 1.00 \\
-v2 +batch & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +dead-reckoning & 1.59 $\pm$ 0.05 & 142 $\pm$ 1 & 273 $\pm$ 14 & 0.034 $\pm$ 0.002 & 0.89 $\pm$ 0.00 & 1.000 & 1.00 & 0.0 & 0.98 $\pm$ 0.00 \\
-v2 +renewal & 1.61 $\pm$ 0.08 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +revocation-filter & 1.79 $\pm$ 0.10 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.005 & 0.91 $\pm$ 0.01 & 0.001 $\pm$ 0.002 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +rssi check & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
-v2 +hybrid detector & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1283 $\pm$ 9 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.7 $\pm$ 2.9 & 0.99 $\pm$ 0.03 \\
-v2 +mix-zones & 3.20 $\pm$ 0.03 & 139 $\pm$ 0 & 1124 $\pm$ 7 & 0.095 $\pm$ 0.004 & 0.90 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.76 $\pm$ 0.06 \\
-v2 +bbs & 5.51 $\pm$ 0.09 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.107 $\pm$ 0.005 & 0.91 $\pm$ 0.01 & 1.000 & 1.00 & 0.0 & 0.99 $\pm$ 0.03 \\
+v2 & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v3-fast & 1.45 $\pm$ 0.01 & 155 $\pm$ 1 & 300 $\pm$ 24 & 0.035 $\pm$ 0.002 & 0.92 $\pm$ 0.00 \\
+v3-private & 6.20 $\pm$ 0.26 & 157 $\pm$ 1 & 254 $\pm$ 14 & 0.034 $\pm$ 0.002 & 0.92 $\pm$ 0.01 \\
+v2 +mac & 1.77 $\pm$ 0.09 & 113 $\pm$ 0 & 1046 $\pm$ 12 & 0.096 $\pm$ 0.005 & 1.15 $\pm$ 0.03 \\
+v2 +tesla & 1.80 $\pm$ 0.18 & 117 $\pm$ 0 & 1087 $\pm$ 15 & 0.098 $\pm$ 0.005 & 92.49 $\pm$ 0.84 \\
+v2 +tesla adaptive & 1.80 $\pm$ 0.11 & 148 $\pm$ 0 & 1374 $\pm$ 14 & 0.110 $\pm$ 0.006 & 0.92 $\pm$ 0.01 \\
+v2 +tesla fast keys & 1.99 & 118 & 1506 & 0.138 & 44.84 \\
+v2 +tesla fast keys & 1.97 & 117 & 1493 & 0.134 & 45.74 \\
+v2 +tesla fast keys & 2.26 & 118 & 1499 & 0.142 & 43.15 \\
+v2 +implicit-cert & 1.87 $\pm$ 0.12 & 131 $\pm$ 0 & 1211 $\pm$ 13 & 0.103 $\pm$ 0.005 & 0.88 $\pm$ 0.01 \\
+v2 +clusters & 1.81 $\pm$ 0.09 & 139 $\pm$ 0 & 1293 $\pm$ 20 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v2 +batch & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v2 +dead-reckoning & 1.59 $\pm$ 0.05 & 142 $\pm$ 1 & 273 $\pm$ 14 & 0.034 $\pm$ 0.002 & 0.89 $\pm$ 0.00 \\
+v2 +renewal & 1.61 $\pm$ 0.08 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v2 +revocation-filter & 1.79 $\pm$ 0.10 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.005 & 0.91 $\pm$ 0.01 \\
+v2 +rssi check & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v2 +hybrid detector & 1.79 $\pm$ 0.07 & 139 $\pm$ 0 & 1283 $\pm$ 9 & 0.106 $\pm$ 0.006 & 0.91 $\pm$ 0.01 \\
+v2 +mix-zones & 3.20 $\pm$ 0.03 & 139 $\pm$ 0 & 1124 $\pm$ 7 & 0.095 $\pm$ 0.004 & 0.90 $\pm$ 0.01 \\
+v2 +bbs & 5.51 $\pm$ 0.09 & 139 $\pm$ 0 & 1286 $\pm$ 14 & 0.107 $\pm$ 0.005 & 0.91 $\pm$ 0.01 \\
 \bottomrule
 \end{tabular}}
-\end{sidewaystable}
+\end{table}
