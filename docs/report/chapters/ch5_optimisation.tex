@@ -1,35 +1,29 @@
 \chapter{Optimisations and Extensions}\label{ch:opt}
 
-The first evaluation of the Phase~I scheme showed where its cost lies. Every BSM carried a full
-ticket and a signature of about 330 bytes, sent ten times a second by every vehicle. At 150 vehicles
-the safety traffic alone occupied about a quarter of the channel. Vehicles also had no revocation
-information at all: they accepted messages from revoked senders until those senders' tickets
-expired. This chapter describes the mechanisms added to address these problems. Each is an option
-of the implementation and is measured on its own in the ablation study
-(Section~\ref{sec:res-ablation}). Table~\ref{tab:profiles} groups them into the profiles compared in
-Chapter~\ref{ch:results}.
+The core scheme of Chapter~\ref{ch:design} would be costly on the radio channel: every BSM would
+carry a full ticket and a signature of about 330 bytes, ten times a second, and vehicles would have
+no revocation information at all, accepting messages from revoked senders until their tickets
+expired. This chapter describes the mechanisms that complete the scheme. Table~\ref{tab:mechanisms}
+lists them with what each improves.
 
 \begin{table}[htbp]\centering\small
-\caption{Mechanisms per profile ($\bullet$ = enabled)}\label{tab:profiles}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
+\caption{Mechanisms added to the core scheme}\label{tab:mechanisms}
+\begin{tabular}{@{}ll@{}}
 \toprule
-Mechanism & Phase-I & v2 & v3-fast & v3-private \\
+Mechanism & Improves \\
 \midrule
-Ticket digests, compact wire format, handover hysteresis & & $\bullet$ & $\bullet$ & $\bullet$ \\
-Fast quarantine over the RSU backbone & & $\bullet$ & $\bullet$ & $\bullet$ \\
-TESLA with adaptive signing and key messages & & & $\bullet$ & $\bullet$ \\
-ECQV implicit-certificate tickets & & & $\bullet$ & $\bullet$ \\
-RSU clusters ($2\times2$) & & & $\bullet$ & $\bullet$ \\
-Load-triggered batch verification & & & $\bullet$ & $\bullet$ \\
-Dead-reckoning BSM triggering & & & $\bullet$ & $\bullet$ \\
-Revocation filter in beacons & & & $\bullet$ & $\bullet$ \\
-Trust-weighted reports & & & $\bullet$ & $\bullet$ \\
-Ticket renewal; signal-strength check & & & $\bullet$ & $\bullet$ \\
-BBS anonymous credentials & & & & $\bullet$ \\
-Cooperative mix zones & & & & $\bullet$ \\
+Ticket digests, compact wire format, handover hysteresis & message size, handovers \\
+Fast quarantine over the RSU backbone & time until an attacker is ignored \\
+TESLA with adaptive signing and key messages & safety-message size \\
+ECQV implicit-certificate tickets & ticket size \\
+RSU clusters ($2\times2$) & number of handovers \\
+Load-triggered batch verification & RSU and vehicle processor load \\
+Dead-reckoning BSM triggering & number of safety messages \\
+Revocation filter in beacons & vehicles ignore revoked senders \\
+Trust-weighted reports & robustness against compromised RSUs \\
+Ticket renewal; signal-strength check & login load; position spoofing \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
 \section{Smaller Messages: Digests, Compact Encoding, Implicit Certificates}
@@ -107,22 +101,6 @@ with 4\,dB log-normal shadowing. It flags a BSM whose claimed position disagrees
 by more than four standard deviations and by at least 100\,m. A position-forging attacker cannot
 move its own transmitter, so its claims stop matching its signal.
 
-\section{The Privacy Profile: BBS Credentials and Mix Zones}
-
-\textbf{BBS credentials.} The TA signs each vehicle's hidden secret, class and epoch once. A login
-proves possession of that signature in zero knowledge and reveals the pseudonym
-$\mathit{nym}_j = H(\mathit{epoch}, j)^{sk_v}$ for some $j < 32$. Logins are unlinkable even to
-colluding RSUs, the TA no longer knows the pseudonyms in advance, and the identity escrow lists the
-pseudonyms the credential can produce. The proof is about 70 times more expensive than a Schnorr proof
-(Table~\ref{tab:compute}). Its nonce-independent part is therefore precomputed while the vehicle is
-idle.
-
-\textbf{Cooperative mix zones.} Changing a pseudonym alone does not stop a global eavesdropper, which
-links the old and new pseudonyms by position and speed. Within 30\,m of a junction, a vehicle with at
-least three neighbours triggers a coordinated change: every neighbour in the zone whose pseudonym is
-old enough changes too, and each stays silent until it has left the zone and for a random
-0.5--1.5\,s, at most 5\,s. The tracker attack of Section~\ref{sec:res-privacy} measures the effect.
-
 \section{Emergency Vehicles}\label{sec:emergency}
 
 Emergency vehicles need the opposite of anonymity on one point: their privileged status must be
@@ -130,7 +108,7 @@ verifiable by everyone, and must be impossible to fake. The extension builds thi
 authorization predicate (\ref{eq:access}).
 \begin{enumerate}
   \item \textbf{Registration.} The TA registers an ambulance's pseudonyms with class
-  \textit{emergency}. The class is in the Merkle leaf (or the BBS credential) and in the proof context,
+  \textit{emergency}. The class is in the Merkle leaf and in the proof context,
   so a car cannot claim it.
   \item \textbf{Service.} Ambulances log in for the service \texttt{emergency-priority}, whose ledger
   policy admits only class \textit{emergency}. Their tickets therefore carry, signed by the RSU, the

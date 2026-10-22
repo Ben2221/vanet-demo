@@ -102,14 +102,6 @@ certificate carries a point $P_U$ from which any receiver reconstructs the holde
 $Q_U = H(\mathit{cert})\,P_U + Q_{CA}$. A certificate is about 64 bytes smaller than an explicit
 key plus signature, and it is authenticated implicitly by the first signature verified under $Q_U$.
 
-\subsection{BBS Anonymous Credentials}
-
-With BBS signatures~\cite{boneh2004bbs,tessaro2023bbs} the TA signs a hidden vehicle secret, the
-class and the epoch once. The vehicle then proves in zero knowledge that it holds such a signature,
-and derives its pseudonym as $\mathit{nym}_j = H(\mathit{epoch}, j)^{sk_v}$ for $j < J$. Two proofs
-cannot be linked to each other, and the scope $j$ limits the number of pseudonyms per epoch, which
-bounds Sybil attacks. No per-pseudonym registration is needed.
-
 \subsection{Bloom Filters}
 
 A Bloom filter~\cite{bloom1970} represents a set in $m$ bits with $k$ hash functions. It has no false

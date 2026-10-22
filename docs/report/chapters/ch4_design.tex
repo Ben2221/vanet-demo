@@ -1,7 +1,8 @@
 \chapter{Proposed Scheme}\label{ch:design}
 
-This chapter describes the scheme as proposed at the Phase~I review and as implemented, called
-\emph{Phase-I} in the evaluation. Chapter~\ref{ch:opt} adds the optimisations.
+This chapter describes the core of the scheme: registration, authentication, handover, detection,
+revocation and identity reveal. Chapter~\ref{ch:opt} adds the mechanisms that make it cheap on the
+radio channel; together they are the scheme evaluated in Chapter~\ref{ch:results}.
 
 \section{Architecture and Design Principle}
 
@@ -117,8 +118,8 @@ afresh, so that a pseudonym's lifetime stays short.
 Each BSM carries the pseudonym, the kinematic fields and the ticket, and is signed with the
 pseudonym's secret key, whose public key is in the ticket. A receiver checks the ticket's RSU
 signature, that the ticket's pseudonym matches, the BSM signature and the ticket expiry. The receiver
-needs no certificate chain and no ledger access. In Phase~I every BSM carries the full ticket, which
-makes it about 330 bytes.
+needs no certificate chain and no ledger access. Carrying the full ticket would make every BSM
+about 330 bytes; Chapter~\ref{ch:opt} replaces it by a digest and most signatures by TESLA MACs.
 
 \section{Misbehaviour Detection and Reporting}\label{sec:detect}
 
@@ -185,5 +186,6 @@ Fabric through a REST gateway that signs each transaction with the caller's iden
   identified organizations, and the ledger is append-only.
   \item \textbf{Limitations.} The TA knows at registration which pseudonyms belong to which vehicle.
   The RSUs learn which pseudonym was where, and a global eavesdropper can link consecutive pseudonyms
-  by position. The privacy profile of Chapter~\ref{ch:opt} addresses both.
+  by position. Anonymous credentials and mix zones would address both; they are left to future work
+  (Chapter~\ref{ch:conclusion}).
 \end{itemize}

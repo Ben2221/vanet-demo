@@ -19,7 +19,7 @@ RSUs & 9 (grid, 450\,m apart), 300\,m nominal range \\
 Seeds & 5 (grid comparison), 10 (compromised RSUs), 3 (others) \\
 Attackers & 10\,\% of the vehicles, random position offsets from 30\,s \\
 Reports to revoke ($K$), reveal threshold & 2 RSUs; 5 of 9 organizations \\
-Ticket lifetime, pseudonyms per vehicle & 30\,s; 5 (20 with mix zones) \\
+Ticket lifetime, pseudonyms per vehicle & 30\,s; 5 \\
 Ledger in sweeps & in-process, 500\,ms commit (Section~\ref{sec:res-ledger}) \\
 Processors & RSU at measured speed, vehicle 5$\times$ slower \\
 Vehicle verification & BSMs of senders within 100\,m \\
@@ -27,8 +27,10 @@ Vehicle verification & BSMs of senders within 100\,m \\
 \end{tabular}}
 \end{table}
 
-Table~\ref{tab:setup} lists the common parameters. The compared variants are the Phase~I scheme, its
-optimised profiles (Table~\ref{tab:profiles}) and the two baselines of Section~\ref{sec:eval-framework}.
+Table~\ref{tab:setup} lists the common parameters. \emph{This work} is the scheme of
+Chapters~\ref{ch:design} and~\ref{ch:opt}; it is compared with the two baselines of
+Section~\ref{sec:eval-framework}, which run on the same simulator, and in
+Section~\ref{sec:res-literature} with published schemes.
 
 \textbf{Metrics.}
 \begin{itemize}
@@ -49,39 +51,39 @@ optimised profiles (Table~\ref{tab:profiles}) and the two baselines of Section~\
 \gentab{tab_compare}
 \gentab{tab_compare_sec}
 
-Tables~\ref{tab:compare} and~\ref{tab:compare-sec} compare all variants at \R{cmp}{vehicles}
-vehicles, and Figure~\ref{fig:grid} shows the trends over vehicle density.
+Tables~\ref{tab:compare} and~\ref{tab:compare-sec} compare this work with the baselines at
+\R{cmp}{vehicles} vehicles, and Figure~\ref{fig:grid} shows the trends over vehicle density.
 
-\textbf{Latency.} The Phase~I scheme issues a ticket in \R{cmp/Phase-I}{ticket_ms_mean}\,ms,
-v3-fast in \R{cmp/v3-fast}{ticket_ms_mean}\,ms (\R{cmp/derived}{ticket_ms_mean_cut_pct}\,\% less),
-and the ECDSA-PKI baseline in \R{cmp/ECDSA-PKI}{ticket_ms_mean}\,ms. The zero-knowledge login is
-therefore as fast as presenting a certificate. Centralising the decision (Central-TA) costs
-\R{cmp/Central-TA}{ticket_ms_mean}\,ms, because every login crosses the backbone and queues at one
-authority. A vehicle accepts a neighbour's BSM after \R{cmp/v3-fast}{v2v_accept_ms_mean}\,ms with
-v3-fast against \R{cmp/Phase-I}{v2v_accept_ms_mean}\,ms with Phase-I: smaller messages spend less
-time on the air, and the vehicle processor has less to verify.
+\textbf{Latency.} This work issues a ticket in \R{cmp/v3-fast}{ticket_ms_mean}\,ms, the ECDSA-PKI
+baseline in \R{cmp/ECDSA-PKI}{ticket_ms_mean}\,ms; the difference is not significant
+(Table~\ref{tab:significance}), so the zero-knowledge login is as fast as presenting a certificate,
+while the RSU learns nothing about which registered vehicle it serves. Centralising the decision
+(Central-TA) costs \R{cmp/Central-TA}{ticket_ms_mean}\,ms, because every login crosses the backbone
+and queues at one authority. Handovers take \R{cmp/v3-fast}{handover_ms_mean}\,ms, again on a par
+with the certificate baseline. A vehicle accepts a neighbour's BSM after
+\R{cmp/v3-fast}{v2v_accept_ms_mean}\,ms.
 
-\textbf{Channel load.} This is the largest effect. Phase-I's \R{cmp/Phase-I}{bsm_bytes}-byte BSMs at
-10\,Hz put \R{cmp/Phase-I}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel. v3-fast sends
-\R{cmp/v3-fast}{safety_bytes_per_vehicle_s}\,B/s, \R{cmp/derived}{safety_factor} times less, by
-combining smaller messages with dead-reckoning triggering. The channel busy ratio falls from
-\R{cmp/Phase-I}{cbr_rsu_mean} to \R{cmp/v3-fast}{cbr_rsu_mean}, and the delivery ratio rises from
-\R{cmp/Phase-I}{pdr} to \R{cmp/v3-fast}{pdr} because fewer frames collide.
+\textbf{Channel load.} This is the largest effect. A certificate-signed BSM at 10\,Hz puts
+\R{cmp/ECDSA-PKI}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel. This work sends
+\R{cmp/v3-fast}{safety_bytes_per_vehicle_s}\,B/s, \R{cmp/derived}{safety_factor} times less: most
+BSMs carry a 16-byte TESLA MAC instead of a signature, and dead-reckoning triggering leaves out the
+BSMs that neighbours can predict. The channel busy ratio falls from
+\R{cmp/ECDSA-PKI}{cbr_rsu_mean} to \R{cmp/v3-fast}{cbr_rsu_mean}, and the delivery ratio rises from
+\R{cmp/ECDSA-PKI}{pdr} to \R{cmp/v3-fast}{pdr} because fewer frames collide.
 
-\textbf{Revocation.} Without information from the ledger, vehicles in Phase-I accepted every BSM from
-revoked senders (\R{cmp/Phase-I}{v2v_revoked_accepted_ratio}). With the revocation filter in RSU
-beacons, v3-fast vehicles accepted \R{cmp/v3-fast}{v2v_revoked_accepted_ratio}. Every variant caught
-every attacker, and no honest vehicle was revoked.
+\textbf{Revocation.} With the revocation filter in RSU beacons, vehicles accepted
+\R{cmp/v3-fast}{v2v_revoked_accepted_ratio} of the BSMs from revoked senders; the baselines model
+revocation at the RSUs only. Every scheme caught every attacker, and no honest vehicle was revoked.
 
-\textbf{Privacy.} Without mix zones, the eavesdropper links \R{cmp/v3-fast}{tracking_success} of the
-pseudonym changes, because a pseudonym change alone does not hide a vehicle's trajectory. v3-private
-lowers this to \R{cmp/v3-private}{tracking_success}, at the price of a ticket time of
-\R{cmp/v3-private}{ticket_ms_mean}\,ms, the cost of the BBS proof.
+\textbf{Privacy.} The eavesdropper links \R{cmp/v3-fast}{tracking_success} of the pseudonym changes:
+changing pseudonyms hides who a vehicle is from the RSU and the ledger, but not its trajectory from
+an observer who hears every BSM. Mix zones, in which vehicles fall silent while they change
+pseudonyms, are left to future work (Chapter~\ref{ch:conclusion}).
 
 \gentab{tab_significance}
 
 Table~\ref{tab:significance} tests the differences: a bold entry means that the difference between
-the challenger and Phase-I is significant at the 5\,\% level (Welch's t-test over the seeds).
+this work and the baseline is significant at the 5\,\% level (Welch's t-test over the seeds).
 
 \begin{figure}[htbp]\centering
 \genfig[\textwidth]{grid_overview}
@@ -99,50 +101,29 @@ the challenger and Phase-I is significant at the 5\,\% level (Welch's t-test ove
 \caption{LuST traffic at three times of day (mean and 95\,\% CI over 3 seeds)}\label{fig:lust}
 \end{figure}
 
-Table~\ref{tab:lust} and Figure~\ref{fig:lust} repeat the comparison of Phase-I and v3-fast on real
-Luxembourg traffic, with 60\,s runs, since a run of the 08:00 peak with over 800 vehicles takes more
-than an hour to simulate. Two differences from the grid
-matter. First, a cut of real traffic starts with hundreds of vehicles already on the road, which all
-log in during the first seconds. The RSUs' processors keep up (a login costs them well under a
-millisecond), but the radio does not: hundreds of login requests of about 680 bytes, each with its
-Merkle path and proof, and the RSUs' ticket responses compete for the channel and wait in the 802.11p
-queues. In a 15\,s run of the 08:00 peak, a login request spent about 110\,ms and a ticket response
-about 240\,ms on the air during the first three seconds. The mean ticket time therefore includes
-this start-up burst. The ticket time after 10\,s shows the steady state: in the
-08:00 peak, v3-fast issues tickets in \R{lust:peak/v3-fast}{ticket_ms_steady_mean}\,ms once the
-burst has passed. Second, real roads with many lanes and junctions give more manoeuvres, so
-dead-reckoning triggering saves less than on the grid. At the peak, v3-fast still puts
-\R{lust:peak/v3-fast}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel against
-\R{lust:peak/Phase-I}{safety_bytes_per_vehicle_s}\,B/s for Phase-I, with channel busy ratios of
-\R{lust:peak/v3-fast}{cbr_rsu_mean} and \R{lust:peak/Phase-I}{cbr_rsu_mean}.
+Table~\ref{tab:lust} and Figure~\ref{fig:lust} run this work on real Luxembourg traffic at three
+times of day, with 60\,s runs, since a run of the 08:00 peak with over 800 vehicles takes more than an
+hour to simulate. Two differences from the grid matter. First, a cut of real traffic starts with
+hundreds of vehicles already on the road, which all log in during the first seconds. The RSUs'
+processors keep up (a login costs them well under a millisecond), but the radio does not: hundreds of
+login requests of about 680 bytes, each with its Merkle path and proof, and the RSUs' ticket responses
+compete for the channel and wait in the 802.11p queues. In a 15\,s run of the 08:00 peak, a login
+request spent about 110\,ms and a ticket response about 240\,ms on the air during the first three
+seconds. The mean ticket time therefore includes this start-up burst. The ticket time after 10\,s
+shows the steady state: in the 08:00 peak, tickets take \R{lust:peak/v3-fast}{ticket_ms_steady_mean}\,ms
+once the burst has passed. Second, real roads with many lanes and junctions give more manoeuvres, so
+dead-reckoning triggering saves less than on the grid: at the peak, this work puts
+\R{lust:peak/v3-fast}{safety_bytes_per_vehicle_s}\,B/s per vehicle on the channel, the channel is
+busy \R{lust:peak/v3-fast}{cbr_rsu_mean} of the time, and \R{lust:peak/v3-fast}{pdr} of the
+broadcasts arrive.
 
-Two results differ from the grid in v3-fast's disfavour. At the peak, its channel busy ratio is
-above the 0.30 at which adaptive signing switches to TESLA, so a neighbour can accept a BSM only once
-its key is disclosed: V2V acceptance takes \R{lust:peak/v3-fast}{v2v_accept_ms_mean}\,ms against
-\R{lust:peak/Phase-I}{v2v_accept_ms_mean}\,ms for Phase-I. This is the price of a channel that still
-delivers \R{lust:peak/v3-fast}{pdr} of the broadcasts, where Phase-I delivers
-\R{lust:peak/Phase-I}{pdr}. Second, between 85 and 89\,\% of the attackers are caught on LuST,
-for both variants, against all of them on the grid: the attack starts at 30\,s of a 60\,s run, and
-an attacker that leaves the coverage of the RSUs before two of them have reported it is not revoked
-in the run. No honest vehicle was revoked.
-
-\section{Ablation: What Each Mechanism Contributes}\label{sec:res-ablation}
-
-\gentab{tab_ablation}
-\gentab{tab_ablation_sec}
-
-Tables~\ref{tab:ablation} and~\ref{tab:ablation-sec} start from v2 and add one mechanism at a time. It separates the
-mechanisms that reduce bytes on the air (TESLA, implicit certificates, dead reckoning) from those
-that reduce latency or handovers (clusters, renewal, batch verification under load), and those that
-change security properties (revocation filter, signal-strength check) or privacy (BBS, mix zones).
-For example, TESLA alone brings the safety traffic from \R{abl/v2}{safety_bytes_per_vehicle_s} to
-\R{abl/v2 +tesla}{safety_bytes_per_vehicle_s}\,B/s, dead reckoning alone to
-\R{abl/v2 +dead-reckoning}{safety_bytes_per_vehicle_s}\,B/s, and the revocation filter alone lowers
-the share of BSMs from revoked senders that vehicles accept from
-\R{abl/v2}{v2v_revoked_accepted_ratio} to \R{abl/v2 +revocation-filter}{v2v_revoked_accepted_ratio}.
-The learned detector in hybrid mode is listed for completeness. It is not part of the profiles: a model
-trained on one road network flagged honest vehicles on another, whereas the rules and the
-signal-strength check transfer across cities.
+Two results are weaker than on the grid. At the peak, the channel busy ratio is above the 0.30 at
+which adaptive signing switches to TESLA, so a neighbour can accept a BSM only once its key is
+disclosed: V2V acceptance takes \R{lust:peak/v3-fast}{v2v_accept_ms_mean}\,ms, still well below the
+100\,ms between two BSMs of a vehicle at 10\,Hz. Second, between 85 and 89\,\%
+of the attackers are caught on LuST, against all of them on the grid: the attack starts at 30\,s of a
+60\,s run, and an attacker that leaves the coverage of the RSUs before two of them have reported it is
+not revoked in the run. No honest vehicle was revoked.
 
 \section{Misbehaviour Detection}\label{sec:res-detect}
 
@@ -168,28 +149,12 @@ RSU misjudges them.
 
 \gentab{tab_trust}
 
-Table~\ref{tab:trust} lets a quarter of the RSUs report random honest pseudonyms every 5\,s. With
-plain $K = 2$ counting, two compromised RSUs together can revoke an honest pseudonym. With
-trust-weighted reports, an RSU's weight falls once investigations show its reports were wrong,
-after which its reports no longer suffice to revoke anyone. Its first false reports still count,
-so weighting does not bring the number of honest vehicles revoked to zero: it falls from 5.8 to
-2.4 per run for v2, while every attacker is still caught.
-
-\section{Privacy}\label{sec:res-privacy}
-
-\gentab{tab_mixzone_tradeoff}
-
-\begin{figure}[htbp]\centering
-\genfig[\textwidth]{mixzone}
-\caption{Mix zones: longest silent period (s) against tracking and silence}\label{fig:mixzone}
-\end{figure}
-
-Pseudonym changes alone do not stop a global eavesdropper. In the grid comparison, the tracker links
-\R{cmp/v3-fast}{tracking_success} of the changes made without mix zones. Table~\ref{tab:mixzone-tradeoff}
-varies the longest silent period of the cooperative mix zones. Longer silence makes linking harder,
-but a silent vehicle is invisible to its neighbours, so the table also reports the share of time
-vehicles were silent and the 95th percentile of the position error neighbours see. This is the
-safety--privacy trade-off that a deployment has to set.
+Table~\ref{tab:trust} lets a quarter of the RSUs report random honest pseudonyms every 5\,s. Two
+compromised RSUs together could revoke an honest pseudonym if every report counted the same. With
+trust-weighted reports (Section~\ref{sec:trust}), an RSU's weight falls once investigations show its
+reports were wrong, after which its reports no longer suffice to revoke anyone. Its first false
+reports still count, so honest vehicles are not fully protected: \R{trust/v3-fast}{honest_revoked}
+honest pseudonyms are revoked per run on average, while every attacker is still caught.
 
 \section{Blockchain Performance}\label{sec:res-ledger}
 
@@ -226,7 +191,7 @@ with vehicle processors as fast as the development PC, 5 times slower, and 10 ti
 \end{figure}
 
 Tables~\ref{tab:emergency} and~\ref{tab:emergency-sec} evaluate the extension of Section~\ref{sec:emergency} on the 14:00 LuST
-traffic (v3-fast, 60\,s runs), where
+traffic (60\,s runs), where
 the start-up burst creates long radio queues at the RSUs. The first compares the ticket time of emergency vehicles with
 that of all other vehicles, with and without the priority lane. The second reports the share of vehicles
 within 300\,m of an emergency vehicle that held a verified alert from it at most 1\,s old, the alert
@@ -281,7 +246,7 @@ cheaper than B-TSCA, whose two pairings alone cost 9.5\,ms. Our messages are lar
 (nine hashes, 288\,B) travels with every proof, which is what lets the RSU check membership without
 learning which registered vehicle it is talking to. Our handover costs more than BPA's
 re-authentication, because the new RSU checks a signed ticket and a signed request instead of
-looking up a shared trust key; RSU clusters (Section~\ref{sec:res-ablation}) avoid most of these
+looking up a shared trust key; RSU clusters (Chapter~\ref{ch:opt}) avoid most of these
 handovers instead.
 
 The largest difference is architectural. BAAIoV~\cite{alsaeed2025baaiov} authenticates every vehicle
@@ -301,9 +266,10 @@ permissioned-blockchain authorization can work without unacceptable latency, com
 communication overhead. On the measured network the answer is yes, under two conditions. First, the
 ledger must stay off the safety-message path. Proofs are verified at the RSU in a fraction of a
 millisecond, while ledger commits take tens to hundreds of milliseconds and are bridged by
-PREAUTH and quarantine. Second, per-message authentication must be cheap. The Phase~I design was
-dominated by its 330-byte BSMs; the optimised profile is \R{cmp/derived}{safety_factor} times lighter
-on the channel and faster than the certificate baseline, without weakening the security model.
+PREAUTH and quarantine. Second, per-message authentication must be cheap: with TESLA and
+dead-reckoning triggering this work puts \R{cmp/derived}{safety_factor} times less safety traffic on
+the channel than certificate-signed BSMs, and its login is as fast as presenting a certificate,
+without giving the RSU or the ledger the vehicle's identity.
 
 \textbf{Threats to validity.}
 \begin{itemize}

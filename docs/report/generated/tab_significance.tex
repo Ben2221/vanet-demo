@@ -1,12 +1,12 @@
-\begin{table}[htbp]\centering\footnotesize\setlength{\tabcolsep}{3.5pt}
-\caption{Welch's t-test against Phase-I (p-values; bold: p $<$ 0.05)}\label{tab:significance}
+\begin{table}[htbp]\centering\small
+\caption{Welch's t-test of this work against each baseline (p-values; bold: p $<$ 0.05)}\label{tab:significance}
 \resizebox{\ifdim\width>\textwidth\textwidth\else\width\fi}{!}{%
-\begin{tabular}{lrrrrrrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
-Challenger & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Ticket after 10 s (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Handover (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{BSM size (B)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{CBR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{V2V accept (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{1.4cm}}{Revoked accepted} \\
+Baseline & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Ticket (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Handover (ms)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{Safety traffic (B/s)} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{PDR} & \multicolumn{1}{>{\raggedleft\arraybackslash}p{2.1cm}}{CBR} \\
 \midrule
-v3-fast & \textbf{3.3e-06} & \textbf{3.4e-06} & \textbf{0.0012} & \textbf{1.7e-12} & \textbf{7.4e-13} & \textbf{1.1e-05} & \textbf{1.2e-09} & \textbf{3.8e-08} & \textbf{8.9e-16} \\
-v3-private & \textbf{3.3e-09} & \textbf{3.9e-09} & \textbf{0.0027} & \textbf{1.4e-12} & \textbf{8.3e-12} & \textbf{8.4e-06} & \textbf{4.4e-09} & \textbf{3.6e-08} & \textbf{5.4e-14} \\
+ECDSA-PKI & 0.069 & 0.25 & \textbf{5.7e-10} & \textbf{4.8e-05} & \textbf{5.6e-08} \\
+Central-TA & \textbf{5.4e-13} & \textbf{4e-12} & \textbf{5.7e-10} & \textbf{2.7e-05} & \textbf{4.3e-08} \\
 \bottomrule
 \end{tabular}}
 \end{table}

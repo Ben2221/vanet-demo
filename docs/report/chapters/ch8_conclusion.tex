@@ -13,9 +13,10 @@ for VANETs that combines zero-knowledge proofs with a permissioned blockchain:
   \item The ledger is kept off the safety-message path.
 \end{itemize}
 The complete system runs on ns-3 with SUMO mobility on a grid and on real Luxembourg traffic, with
-measured cryptographic costs, against certificate-based and centralised baselines. The optimised
-profile issues tickets faster than the certificate baseline and reduces the safety traffic by a
-factor of \R{cmp/derived}{safety_factor}. Its revocation filter lets vehicles, not only RSUs, ignore
+measured cryptographic costs, against certificate-based and centralised baselines and published
+schemes. Its login is as fast as presenting a certificate and costs about as much computation as
+BPA, and it puts \R{cmp/derived}{safety_factor} times less safety traffic on the channel than
+certificate-signed messages. Its revocation filter lets vehicles, not only RSUs, ignore
 revoked senders. On VeReMi Extension, the detector improves from an F1 score of \R{veremi}{rules_f1}
 to \R{veremi}{hgb_window_f1}. Emergency vehicles are supported as a policy-restricted class whose
 alerts cannot be forged under a normal ticket.
@@ -25,14 +26,14 @@ alerts cannot be forged under a normal ticket.
 \begin{itemize}
   \item The evaluation is simulation-based; vehicle processing speed is an assumption bounded by a
   sensitivity sweep, not a measurement on OBU hardware.
-  \item The TA knows which pseudonyms belong to which vehicle in the Merkle variant; only the BBS
-  variant removes this, at a higher login cost.
-  \item A global eavesdropper links most pseudonym changes unless mix zones are used, and mix zones
-  cost neighbours some awareness while vehicles are silent.
+  \item The TA knows which pseudonyms belong to which vehicle.
+  \item A global eavesdropper links most pseudonym changes by position and speed.
+  \item Login and handover messages are larger than in BPA, because the Merkle path travels with
+  every proof.
   \item A coalition of $t$ RSU organizations can unmask any vehicle; this is the intended
   accountability, but it requires that fewer than $t$ organizations collude.
-  \item Learned detectors did not transfer reliably between road networks; the deployed profile uses
-  rules and the signal-strength check.
+  \item Learned detectors did not transfer reliably between road networks; the scheme uses rules
+  and the signal-strength check.
   \item The processor part of the emergency priority lane is modelled approximately: work already
   queued keeps its finish times. Any radio can use a higher access category, so the radio part
   relies on the RSU's cap on priority answers rather than on enforcement.
@@ -41,6 +42,9 @@ alerts cannot be forged under a normal ticket.
 \section{Future Work}
 
 \begin{enumerate}
+  \item Remove the remaining privacy gaps: anonymous credentials such as BBS~\cite{boneh2004bbs}, so
+  that the TA no longer knows the pseudonyms, and cooperative mix
+  zones~\cite{beresford2003mix,freudiger2007mix} against a global eavesdropper.
   \item Measure the cryptographic operations on OBU-class hardware, for example a Raspberry Pi or a
   commercial V2X unit, to replace the processor scaling factor.
   \item Run the full parameter sweeps against the real Fabric network, distributed over several
