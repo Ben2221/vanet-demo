@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase II Proposal</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 13mm 15mm; }
+  :root { --ink:#111; --muted:#444; --rule:#999; --head:#e9edf2; }
+  * { box-sizing: border-box; }
+  body { font-family: "Times New Roman", "Liberation Serif", "DejaVu Serif", serif;
+         font-size: 10.4pt; line-height: 1.3; color: var(--ink); background:#fff; margin:0; }
+  header { display:flex; align-items:center; gap:12px; border-bottom:1.5px solid #000; padding-bottom:6px; }
+  header img { height: 44px; }
+  header .t { flex:1; text-align:center; }
+  .k { font-size:9pt; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  h1 { font-size:13.2pt; margin:2px 0 3px; line-height:1.2; }
+  .meta { font-size:9.3pt; color:var(--muted); }
+  h2 { font-size:11pt; margin:9px 0 3px; border-bottom:.6px solid var(--rule); padding-bottom:1px; }
+  p { margin:3px 0; text-align:justify; }
+  table { width:100%; border-collapse:collapse; font-size:9.3pt; margin:3px 0; }
+  th, td { border:.6px solid var(--rule); padding:2.5px 4px; vertical-align:top; text-align:left; }
+  th { background:var(--head); }
+  td.n { white-space:nowrap; font-weight:bold; }
+  ul, ol { margin:2px 0 2px 18px; padding:0; }
+  li { margin:1px 0; }
+  .note { font-size:9.3pt; border-left:2.5px solid #555; padding:2px 6px; margin:4px 0; background:#f6f6f6; }
+  .pb { break-before: page; }
+  code { font-size:9pt; font-family:"Liberation Mono","Courier New",monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="logo.jpg" alt="IIIT Kottayam">
+  <div class="t">
+    <div class="k">B.Tech Project &middot; Phase II Proposal &middot; Group 13</div>
+    <h1>Privacy-Preserving Authentication and Authorization for VANETs<br>Using Blockchain and Zero-Knowledge Proofs</h1>
+    <div class="meta">Ben Savio (2023BCY0009) &middot; Harsh Kumar Gour (2023BCY0010) &middot; Byreddy Varshith Reddy (2023BCY0063) &middot; Andela Harsha Vardhan (2023BCY0024)<br>
+    Supervisor: Dr. Deepak Jose &middot; Department of CSE-Cyber Security, IIIT Kottayam &middot; November 2026</div>
+  </div>
+</header>
+
+<h2>1. Phase I in Brief</h2>
+<p>Phase I designed, implemented and evaluated a complete lifecycle: vehicles prove registration and class with a Schnorr zero-knowledge proof against a Merkle root held on Hyperledger Fabric, receive short-lived RSU tickets, sign safety messages with TESLA, and are reported, revoked and (by a threshold of RSU organisations) unmasked when they misbehave. The system runs on ns-3 (IEEE 802.11p) with SUMO mobility on a grid and on real Luxembourg traffic (LuST). <b>Key results:</b> login in 1.59&nbsp;ms (ECDSA-PKI 1.75&nbsp;ms, central TA 22.49&nbsp;ms); 3.9&times; less safety traffic and channel busy ratio 0.147&nbsp;&rarr;&nbsp;0.047; detector F1 0.963 on VeReMi Extension; Fabric commit 50&ndash;66&nbsp;ms with a 50&nbsp;ms batch timeout.</p>
+
+<h2>2. Gaps Left Open by Phase I</h2>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:24%">Gap</th><th>Evidence from the Phase I report</th></tr>
+  <tr><td class="n">G1</td><td>Location privacy</td><td>A global eavesdropper links <b>0.99</b> of pseudonym changes (Table 6.3); the TA knows which pseudonyms belong to which vehicle (&sect;4.11).</td></tr>
+  <tr><td class="n">G2</td><td>Compromised RSUs</td><td>With 25&nbsp;% faulty RSUs, <b>3.0&nbsp;&plusmn;&nbsp;0.8</b> honest pseudonyms are still revoked per run (Table 6.10).</td></tr>
+  <tr><td class="n">G3</td><td>Ledger realism</td><td>Parameter sweeps used an in-process ledger with the measured Raft time; real Fabric was benchmarked separately on one machine.</td></tr>
+  <tr><td class="n">G4</td><td>Detection</td><td>Learned detectors did not transfer between road networks; Sybil, adaptive (within-limit) and colluding attackers were not evaluated.</td></tr>
+  <tr><td class="n">G5</td><td>Assurance</td><td>Security was argued informally; vehicle processing cost was scaled from a PC (&times;5, &times;10), not measured on OBU-class hardware.</td></tr>
+</table>
+<div class="note">BBS anonymous credentials and cooperative mix zones are <b>already implemented</b> in the code base (<code>protocol/bbs.py</code>, <code>--credential bbs</code>, <code>--mix-zones</code>) but were not evaluated in Phase I, so G1 starts from working code.</div>
+
+<h2>3. Phase II Work Packages</h2>
+<table>
+  <tr><th style="width:14%">Member</th><th style="width:44%">Work package</th><th>Deliverable and success metric</th></tr>
+  <tr>
+    <td><b>WP1</b><br>Ben Savio<br><i>(G1)</i></td>
+    <td><b>Location privacy and an Indian scenario.</b> Evaluate mix zones and BBS credentials on LuST; add a stronger eavesdropper (Kalman-filter multi-target tracker); build an IITH test-track scenario from TiHAN-V2X GPS tracks; scale LuST to a full day.</td>
+    <td>Share of pseudonym changes tracked well below 0.99, anonymity-set size, and the cost in delivery ratio and latency.</td>
+  </tr>
+  <tr>
+    <td><b>WP2</b><br>Harsh Kumar Gour<br><i>(G2, G3)</i></td>
+    <td><b>Distributed ledger and robust revocation.</b> Deploy Fabric across &ge;&nbsp;3 machines with emulated wide-area delay and rerun the main sweeps against it; require reports from distinct organisations and attach evidence that the chaincode checks.</td>
+    <td>Commit latency (p50/p95) over a WAN; honest pseudonyms revoked 3.0&nbsp;&rarr;&nbsp;&asymp;&nbsp;0 while every attacker is still caught.</td>
+  </tr>
+  <tr>
+    <td><b>WP3</b><br>Byreddy Varshith Reddy<br><i>(G5)</i></td>
+    <td><b>Formal verification and hardware cost.</b> Model login, handover, revocation and threshold reveal in Tamarin (or ProVerif); measure every cryptographic operation on a Raspberry Pi. Stretch: post-quantum signatures (ML-DSA / Falcon) for tickets and TESLA anchors.</td>
+    <td>Authentication, secrecy and replay lemmas proven (or attacks found and fixed); measured per-operation times replace the scaling factor.</td>
+  </tr>
+  <tr>
+    <td><b>WP4</b><br>Andela Harsha Vardhan<br><i>(G4)</i></td>
+    <td><b>Stronger attackers and transferable detection.</b> Sybil attacks with a vehicle&rsquo;s own pseudonyms, adaptive attackers inside plausibility limits, colluding vehicles, RSU flooding; train on grid + LuST + VeReMi and test on a held-out map; cooperative voting between vehicles.</td>
+    <td>F1 on the held-out map; detection rate and time to revocation for each new attacker type.</td>
+  </tr>
+</table>
+<p><b>Shared:</b> one integrated Phase&nbsp;I vs. Phase&nbsp;II comparison on LuST, the final report and live demonstration, and a paper draft.</p>
+
+<h2 class="pb">4. Datasets</h2>
+<p><b>LuST</b> (traffic) and <b>VeReMi Extension</b> (misbehaviour) remain the primary datasets. We also audited <b>TiHAN-V2X</b> (IIT Hyderabad; C-V2X PC5, 10,252 V2V and 2,956 V2I records). Its GPS tracks are consistent with 10&nbsp;Hz driving (&asymp;&nbsp;1.4&nbsp;m between records), so we will use them for road geometry (WP1) and for injecting position attacks (WP4). Its radio fields failed our consistency checks: speeds are uniformly spread between fixed bounds, signal strength is uncorrelated with distance (r&nbsp;=&nbsp;&minus;0.01), the distance column differs from the GPS distance by &asymp;&nbsp;500&nbsp;m (median), received power and noise values are physically impossible, and latency is below 1&nbsp;ms. We will therefore not use it to calibrate the radio model.</p>
+
+<h2>5. Timeline (12 weeks)</h2>
+<table>
+  <tr><th style="width:10%"></th><th>Weeks 1&ndash;3</th><th>Weeks 4&ndash;6</th><th>Weeks 7&ndash;9</th><th>Weeks 10&ndash;12</th></tr>
+  <tr><td class="n">WP1</td><td>Mix-zone and BBS runs on LuST</td><td>Tracker attacker; privacy metrics</td><td>IITH scenario; full-day LuST</td><td rowspan="4" style="vertical-align:middle">Integrated LuST comparison, final runs, report, demo and paper draft</td></tr>
+  <tr><td class="n">WP2</td><td>Multi-machine Fabric with WAN delay</td><td>Sweeps on real ledger</td><td>Distinct-organisation and evidence-backed reports</td></tr>
+  <tr><td class="n">WP3</td><td>Tamarin model of login</td><td>Handover, revocation, reveal models</td><td>Raspberry Pi measurements; PQ stretch</td></tr>
+  <tr><td class="n">WP4</td><td>Sybil and adaptive attacker models</td><td>Collusion, flooding; cross-map data</td><td>Cross-map training; cooperative voting</td></tr>
+</table>
+<p><b>Milestones:</b> M1 (week 3) all set-ups running &middot; M2 (week 6) first results for a mid-term review &middot; M3 (week 9) all experiments complete &middot; M4 (week 12) final report and demonstration.</p>
+
+<h2>6. Points for the Mentor&rsquo;s Opinion</h2>
+<ol>
+  <li>Are WP1&ndash;WP4 the right priorities, or should one be dropped to deepen the others?</li>
+  <li>Should we also add C-V2X through ns-3 5G-LENA, IEEE 1609.2 message encoding, or traffic-signal preemption for emergency vehicles?</li>
+  <li>Could TiHAN share the raw V2X logs behind the published dataset, with real signal strength and timing?</li>
+  <li>Can the department provide a Raspberry Pi or a V2X unit for the hardware measurements (WP3)?</li>
+  <li>Should we target a conference or journal paper from the Phase II results?</li>
+</ol>
+
+</body>
+</html>
